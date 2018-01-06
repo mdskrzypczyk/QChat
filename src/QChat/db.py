@@ -1,51 +1,55 @@
 import sqlite3
 from sqlite3 import Error
-from log import QChatLogger
+from QChat.log import QChatLogger
 
 
-def DBException(Exception):
+class DBException(Exception):
     pass
 
 
-def TableFormat:
+class TableFormat:
     def __init__(self, column_tuple):
         self.info = column_tuple
 
     def __str__(self):
-        info_str = "({})".format(" ".join(["{} {} {}".format(v_name, v_type, v_opts) in self.info]))
+        info_str = "({})".format(", ".join(["{} {} {}".format(v_name, v_type, v_opts) for v_name, v_type, v_opts,
+                                           in self.info]))
         return info_str
 
-def EntryInfo:
+class EntryInfo:
     def __init__(self, **kwargs):
         self.info = kwargs
 
-    def __str__(self):
+    def kvtup(self):
         keys, values = [], []
-        for k, v in self.info:
-            keys.append(k)
-            values.append(v)
-        return " ".join(keys), " ".join(values)
+        for k, v in self.info.items():
+            keys.append(str(k))
+            if type(v) == str:
+                values.append("'{}'".format(v))
+            else:
+                values.append(str(v))
+        return ", ".join(keys), ", ".join(values)
 
 
-def EquivalenceInfo(EntryInfo):
+class EquivalenceInfo(EntryInfo):
     def __str__(self):
         " ".join(["{} = {}".format(k, v) for k, v in self.info.items()])
 
 
-def DB(self):
+class DB:
     def __init__(self, name, config):
         self.conn = None
         self.name = name
-        self.logger = QChatLogger()
+        self.logger = QChatLogger(name)
         self.db_file = config['db_file']
 
     def __del__(self):
         self._disconnect_from_db()
 
-    def _connect_to_db():
+    def _connect_to_db(self):
         if not self.conn:
             try:
-                self.loger.debug("Connecting to database at {}".format(self.db_file))
+                self.logger.debug("Connecting to database at {}".format(self.db_file))
                 self.conn = sqlite3.connect(self.db_file)
                 self.logger.debug("Successfully connected to database at {}".format(self.db_file))
             except Error as e:
@@ -54,11 +58,12 @@ def DB(self):
         else:
             self.logger.error("Attempted to double create database at {}".format(self.db_file))
 
-    def _disconnect_from_db():
+    def _disconnect_from_db(self):
         if self.conn:
             try:
                 self.logger.debug("Disconnecting from database at {}, saving".format(self.db_file))
                 self.conn.close()
+                self.conn = None
                 self.logger.debug("Successfully closed connection to database at {}".format(self.db_file))
             except Error as e:
                 self.logger.error("Failed to close connection to database at {} with error:\n{}".format(self.db_file, e))
@@ -71,20 +76,22 @@ def DB(self):
             c = self.conn.cursor()
             return c.execute(sql)
         except Error as e:
-            self.logger.error("Failed to add entry to table with error:\n{}".format(e))
+            self.logger.error("Failed perform operation {} with error:\n{}".format(sql, e))
         return None
 
     def _create_table(self, name, table_info):
-        return self._db_operation("CREATE TABLE IF NOT EXISTS {} ({});".format(name, table_info))
+        return self._db_operation("CREATE TABLE IF NOT EXISTS {} {};".format(name, table_info))
 
     def _has_table(self, name):
-        return self._db_operation("SELECT name FROM sqlite_master WHERE type='table' AND name={};".format(name))
+        res = self._db_operation("SELECT name FROM sqlite_master WHERE type='table' AND name='{}';".format(name))
+        return res.fetchone() != None
 
     def _add_entry(self, table_name, entry_info):
-        return self._db_operation("INSERT INTO {} ({}) VALUES ({});".format(table_name, entry_info))
+        kvtup = entry_info.kvtup()
+        return self._db_operation("INSERT INTO {} ({}) VALUES ({});".format(table_name, kvtup[0], kvtup[1]))
 
     def _get_entry(self, table_name, search_criteria):
-        return self._db_operation("SELECT entry FROM {} WHERE {}".format(table_name, search_criteria))
+        return self._db_operation("SELECT entry FROM {} WHERE {}".format(table_name, search_criteria)).fetchone()
 
     def _delete_entry(self, table_name, search_criteria):
         return self._db_operation("DELETE FROM {} WHERE {}".format(table_name, search_criteria))
@@ -95,8 +102,10 @@ def DB(self):
     def _edit_entry(self, table_name, edit_info, search_criteria):
         return self._db_operation("UPDATE {} SET {} WHERE {}".format(table_name, edit_info, search_criteria))
 
-def UserDB(DB):
+
+class UserDB(DB):
     def __init__(self):
+        pass
 
     def addUser(self):
         pass
@@ -111,5 +120,5 @@ def UserDB(DB):
         pass
 
 
-def MessageDB(DB):
+class MessageDB(DB):
     pass

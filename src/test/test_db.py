@@ -1,18 +1,22 @@
-from QChat.db import DB
-from os.path import exists, unlink
+from QChat.db import DB, TableFormat, EntryInfo
+from os import unlink
+from os.path import exists
 
 
 class TestDB:
-    def setUp(cls):
+    @classmethod
+    def setup_class(cls):
         cls.test_config =  {"db_file": "testDB.sqlite3"}
-        cls.test_table_info = [("v1", "integar","PRIMARY KEY"),
-                               ("v2", "text", "NOT NULL")]
-        cls.test_database = DB(name="testDB")
-        cls.test_entry_1 = {"v1": "1", "v2": "test1"}
-        cls.test_entry_2 = {"v1": "2", "v2": "test2"}
+        cls.test_table_info = TableFormat([("v1", "integar","PRIMARY KEY"),
+                                           ("v2", "text", "NOT NULL")])
+        cls.test_database = DB(name="TestDB", config=cls.test_config)
+        cls.test_entry_1 = EntryInfo(v1=1, v2="test1")
+        cls.test_entry_2 = EntryInfo(v1=2, v2="test2")
 
-    def tearDown(cls):
-        cls.test_database._disconnect_from_db()
+    @classmethod
+    def teardown_class(cls):
+        if cls.test_database.conn:
+            cls.test_database._disconnect_from_db()
         if exists(cls.test_config['db_file']):
             unlink(cls.test_config['db_file'])
 
