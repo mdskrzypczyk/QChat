@@ -1,5 +1,6 @@
 import json
 
+HEADER_LENGTH = 4
 PAYLOAD_SIZE = 4
 MAX_SENDER_LENGTH = 16
 
