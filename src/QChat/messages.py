@@ -9,7 +9,7 @@ class MalformedMessage(Exception):
 
 
 class Message:
-    header = 'MSSG'
+    header = b'MSSG'
     def __init__(self, sender, message_data):
         if len(sender) > MAX_SENDER_LENGTH:
             raise MalformedMessage("Length of sender too long")
@@ -22,6 +22,8 @@ class Message:
                 self.data = message_data
             elif type(message_data) == str:
                 self.data = json.loads(message_data)
+            elif type(message_data) == bytes:
+                self.data = json.loads(str(message_data, 'utf-8'))
             else:
                 raise MalformedMessage
         except:
@@ -29,26 +31,38 @@ class Message:
 
 
     def encode_message(self):
-        padded_sender = ('\x00'*MAX_SENDER_LENGTH + self.sender)[-16:]
+        padded_sender = (b'\x00'*MAX_SENDER_LENGTH + bytes(self.sender, 'utf-8'))[-16:]
         try:
-            byte_data = json.dumps(self.data)
+            byte_data = bytes(json.dumps(self.data), 'utf-8')
         except:
             raise MalformedMessage
 
-        size = str(len(byte_data).to_bytes(PAYLOAD_SIZE, 'big'), 'utf-8')
+        size = len(byte_data).to_bytes(PAYLOAD_SIZE, 'big')
         return self.header + padded_sender + size + byte_data
 
 
 class RGSTMessage(Message):
-    header = 'RGST'
+    header = b'RGST'
 
 
 class AUTHMessage(Message):
-    header = 'AUTH'
+    header = b'AUTH'
 
 
 class QCHTMessage(Message):
-    header = 'QCHT'
+    header = b'QCHT'
+
+
+class RQTUMessage(Message):
+    header = b'RQTU'
+
+
+class GETUMessage(Message):
+    header = b'GETU'
+
+
+class BB84Message(Message):
+    header = b'BB84'
 
 
 class MessageFactory:
@@ -57,7 +71,10 @@ class MessageFactory:
             Message.header: Message,
             RGSTMessage.header: RGSTMessage,
             AUTHMessage.header: AUTHMessage,
-            QCHTMessage.header: QCHTMessage
+            RQTUMessage.header: RQTUMessage,
+            GETUMessage.header: GETUMessage,
+            QCHTMessage.header: QCHTMessage,
+            BB84Message.header: BB84Message
         }
 
     def create_message(self, header, sender, message_data):

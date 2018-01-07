@@ -3,6 +3,7 @@ import pytest
 from QChat.connection import QChatConnection, ConnectionError
 from QChat.messages import Message
 
+
 class mock_connection:
     def __init__(self, buffer):
         self.buffer = buffer
@@ -28,7 +29,7 @@ class TestQChatConnection:
         cls.test_message_data = {"user": cls.test_sender}
         cls.test_addr = 'localhost'
         cls.test_config1 = {"host": "localhost", "port": 8000}
-        cls.test_config1 = {"host": "localhost", "port": 8001}
+        cls.test_config2 = {"host": "localhost", "port": 8001}
 
     def test_QChatConnection(self):
         connection = QChatConnection(name=self.test_name, config=self.test_config1)
@@ -99,7 +100,4 @@ class TestQChatConnection:
         assert connection.message_queue[0] is not None
 
     def test_send_message(self):
-        pass
-
-    def test_send_qubit(self):
         pass
