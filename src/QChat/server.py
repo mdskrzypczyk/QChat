@@ -11,6 +11,11 @@ class QChatServer:
         self.connection = QChatConnection()
         self.userDB = {}
         self.messageDB = {}
+        self.initialize_mailbox()
+
+    def initialize_mailbox(self):
+        # Thread QChatConnection.listen_for_connections
+
 
     def hasUser(self, user):
         return self.userDB.get(user) != None

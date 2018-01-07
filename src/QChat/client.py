@@ -1,10 +1,10 @@
 from connection import QChatConnection
-from db import UserDB, MessageDB
+from QChat.server import QChatServer
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA, DSA
 
-class QChatClient:
+class QChatClient(QChatServer):
     def __init__(self):
         self.rsa_key = RSA.generate(2048)
         self.pub_key = self.key.publickey().exportKey()

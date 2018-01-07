@@ -1,56 +1,65 @@
 import socket
 import threading
+from QChat.messages import HEADER_LENGTH, PAYLOAD_SIZE, Message
 from SimulaQron.cqc.pythonLib.cqc import *
 
 class QChatConnection:
     def __init__(self, name, config):
         self.cqc = CQCConnection(name)
         self.host = config['host']
-        self.port = config['port']
+        self.server_port = config['server_port']
+        self.client_port = config['client_port']
         self.message_lock = threading.Lock()
         self.message_queue = []
 
-    def send_classical(self, host, port, data):
-        s = self.connect_to_host(host, port)
-        s.sendall(data)
-        response = s.recv(1024)
-        s.close()
-
-    def establish_key(self, host, port):
-        # BB84 or whatever here
-        pass
-
-    def connect_to_host(self, host, port):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((host, port))
-        return s
-
     def listen_for_connection(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((self.host, self.port))
+        s.bind((self.host, self.server_port))
         while True:
             s.listen(1)
             conn, addr = s.accept()
-            self.handle_connection(conn, addr)
 
-    def handle_connection(self, conn, addr):
-        message = None
-        while True:
+            # Thread this
+            self._handle_connection(conn, addr)
+
+    def _handle_connection(self, conn, addr):
+        header = conn.recv(HEADER_LENGTH)
+        if header != Message.header:
+            raise Exception("Incorrect message header")
+
+        size = conn.recv(PAYLOAD_SIZE)
+        if len(size) != PAYLOAD_SIZE:
+            raise Exception("Incorrect payload size")
+
+        padded_sender = conn.recv(MAX_LENGTH_SENDER)
+
+
+        data_length = int.from_bytes(size, 'big')
+        if data_length <= 0:
+            raise Exception("Incorrect data length")
+
+        message_data = None
+        while len(message_data) < data_length:
             data = conn.recv(1024)
             if not data:
-                break
-            message += data
+                raise Exception("Message data too short")
+            message_data += data
 
-        if message:
-            insert_message_into_queue(message)
+        if len(message_data) > data_length or conn.recv(1):
+            raise Exception("Message data too long")
 
-    def insert_message_into_queue(self, message):
+        self._insert_into_queue(addr, Message(message_data))
+
+    def _insert_message_into_queue(self, addr, message):
         self.message_lock.acquire()
         self.message_queue.append(message)
         self.message_lock.release()
 
-    def recv_classical(self):
-        self.message_lock.acquire()
-        message = self.message_queue.pop(0)
-        self.message_lock.release()
-        return message
+    def get_message(self):
+        return self.message_queue.pop(0)
+
+    def send_message(self, host, port):
+        pass
+
+    def send_qubit(self, user):
+        pass
