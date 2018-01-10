@@ -32,6 +32,13 @@ class QChatConnection:
         if self.listening_socket:
             self.listening_socket.close()
 
+    def get_connection_info(self):
+        info = {
+            "host": self.host,
+            "port": self.port
+        }
+        return info
+
     def listen(self):
         self.listening_socket.bind((self.host, self.port))
         while True:

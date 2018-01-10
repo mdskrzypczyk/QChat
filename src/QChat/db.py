@@ -1,6 +1,7 @@
 import sqlite3
 import threading
 from sqlite3 import Error
+from collections import defaultdict
 from QChat.log import QChatLogger
 
 
@@ -107,17 +108,43 @@ class DB:
 class UserDB:
     def __init__(self):
         self.lock = threading.Lock()
-        self.db = {}
+        self.db = defaultdict(dict)
 
-    def getUser(self):
+    def _get_user(self, user):
         return self.db.get(user)
 
     def hasUser(self, user):
-        return self.getUser(user) is not None
+        return self._get_user(user) is not None
 
-    def getUserKey(self, user):
-        user_info = self.getUser(user)
-        return user_info
+    def getPublicKey(self, user):
+        return self._get_user(user).get('pub')
+
+    def getMessageKey(self, user):
+        return self._get_user(user).get('message_key')
+
+    def getConnectionInfo(self, user):
+        return self._get_user(user).get('connection')
+
+    def deleteUserInfo(self, user, fields):
+        user_info = self.db._get_user(user)
+        for field in fields:
+            user_info.pop(field)
+
+    def deleteUser(self, user):
+        self.db.pop(user)
+
+    def changeUserInfo(self, user, **kwargs):
+        self.db[user].update(kwargs)
+
+    def addUser(self, user, **kwargs):
+        self.db[user].update(kwargs)
+
+    def getPublicUserInfo(self, user):
+        public_info = {
+            "connection": self.getConnectionInfo(user),
+            "pub": self.getPublicKey(user)
+        }
+        return public_info
 
 
 class MessageDB(DB):
