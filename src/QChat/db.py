@@ -103,21 +103,8 @@ class DB:
         return self._db_operation("UPDATE {} SET {} WHERE {}".format(table_name, edit_info, search_criteria))
 
 
-class UserDB(DB):
-    def __init__(self):
-        pass
-
-    def addUser(self):
-        pass
-
-    def deleteUser(self):
-        pass
-
-    def editUser(self):
-        pass
-
-    def getUser(self):
-        pass
+class UserDB(dict):
+    pass
 
 
 class MessageDB(DB):

@@ -1,47 +1,40 @@
-from connection import QChatConnection
+import os
+import json
 from QChat.server import QChatServer
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA256
-from Crypto.PublicKey import RSA, DSA
-
-class QChatClient(QChatServer):
-    def __init__(self):
-        self.rsa_key = RSA.generate(2048)
-        self.pub_key = self.key.publickey().exportKey()
-        self.connection = QChatConnection()
-        self.userDB = {}
-        self.messageDB = {}
-        self.server_info = ServerInfo()
-
-    def _get_client_info(self):
-        # Send a request to the server for the user connection information
-
-    def authenticateUser(self):
-        # Receive the authentication string
-        auth = ...
-        digest = SHA256.new()
-        digest.update(auth)
-        signer = PKCS1_v1_5(self.rsa_key)
-        sig = signer.sign(digest)
-
-        # Send the signature to the server
-
-        # Verify that authentication was successful
 
 
-    def register_user(self):
-        # Send a message requesting registration for a username
-        # Send host, port, public key information for receiving messages
-        # Verify that registration was successful
+def load_config(user):
+    path = os.path.abspath(__file__)
+    config_path = os.path.dirname(path) + "/config.json"
+    with open(config_path) as f:
+        config = jsonload(f)
+    return config[user] if config.get(user) else None
 
-    def send_qubit(self, user):
-        # Send qubit over the cqc connection to the user
 
-    def send_message(self, user):
-        # Check if we have the user's information
-        # Obtain it from the server if we do not
-        # Send a message to the user's client
+class QChatClient:
+    def __init__(self, user: str):
+        self.server_config = load_config(user)
+        self.server = QChatServer(user, self.server_config)
 
-    def read_message(self, user):
-        # Check inbox of messages from user
-        # Read the oldest message in this inbox
+    def getContacts(self, verbose=False):
+        return self.server.get_contact_info(verbose)
+
+    def sendMessage(self, user: str, message_data: str):
+        return self.server.send_qchat_message(user, message_data)
+
+    def getMailboxInfo(self):
+        return self.server.get_mailbox_info()
+
+    def getMessages(self, user, count):
+        return self.server.get_messages(user, count)
+
+    def sendQubit(self, user, qubit_info):
+        return self.server.send_qubit_message(user, qubit_info)
+
+    def shareEPR(self, user):
+        return self.server.create_shared_epr(user)
+
+    def updatePublicKey(self):
+        return self.server.update_public_key()

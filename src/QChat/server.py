@@ -1,11 +1,10 @@
 import threading
-import random
 import time
 from collections import defaultdict
-from Crypto.PublicKey import RSA
-from Crypto.Signature import PKCS1_v1_5
-from Crypto.Hash import SHA256
 from QChat.connection import QChatConnection
+from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
+from QChat.db import UserDB
+from QChat.mailbox import QChatMailbox
 from QChat.messages import GETUMessage, RQTUMessage, RGSTMessage, QCHTMessage
 
 
@@ -18,18 +17,18 @@ class DaemonThread(threading.Thread):
 class QChatServer:
     def __init__(self, name, config):
         self.name=name
-        self.rsa_key = RSA.generate(2048)
-        self.pub_key = self.rsa_key.publickey().exportKey()
         self.connection_lock = threading.Lock()
         self.connection = QChatConnection(name=name, config=config)
-        self.userDB = {}
+        self.db_lock = threading.Lock()
+        self.userDB = UserDB()
         self.control_messages = defaultdict(list)
-        self.mailbox = defaultdict(list)
+        self.mailbox_lock = threading.Lock()
+        self.mailbox = QChatMailbox()
         self.initialize_mailbox()
 
     def process_message(self, message):
         if message.header == QCHTMessage.header:
-            self.mailbox[message.sender].append(message)
+            self.mailbox.store_message(message.sender, message)
 
         elif message.header == RGSTMessage.header:
             self.registerUser(**message.data)
@@ -60,8 +59,8 @@ class QChatServer:
                 self.process_message(message)
 
     def initialize_mailbox(self):
-        self.listener = DaemonThread(target=self.connection.listen_for_connection)
-        self.message_reader = DaemonThread(target=self.load_mailbox)
+        self.connection_listener = DaemonThread(target=self.connection.listen_for_connection)
+        self.reader = DaemonThread(target=self.load_mailbox)
 
     def hasUser(self, user):
         return self.userDB.get(user) != None
@@ -129,24 +128,42 @@ class QChatServer:
         self.connection.send_message(host, port, message.encode_message())
 
     def verifyUser(self, user):
-        auth = bytes([random.randint(0,255) for _ in range(128)])
-        connection_info = self.userDB[user]
-        self.connection_lock.acquire()
-        self.connection.send_classical(connection_info['host'], connection_info['port'], auth)
-        self.connection_lock.release()
-        # Receive the response
-        signature = ...
-
-        pubkey = self.userDB[user]["pub"]
-        rsakey = RSA.importKey(pubkey)
-        signer = PKCS1_v1_5.new(rsakey)
-        digest = SHA256.new()
-        digest.update(auth)
-
-        if signer.verify(digest, signature):
-            return True
         return False
 
-    def establish_key(self, protocol):
-        protocol.execute()
+    def establish_key(self, user):
+        key = ...
+        self.userDB[user]['key'] = key
+
+    def get_contact_info(self, verbose=False):
+        if verbose:
+            return self.userDB
+        else:
+            return self.userDB.keys()
+
+    def send_qchat_message(self, user, plaintext):
+        if self._user_exists(user):
+            # Encrypt the message
+            user_key = self.userDB[user]['key']
+            nonce, ciphertext, tag = QChatCipher(user_key).encrypt(message)
+            message_data = {"nonce": nonce, "ciphertext": ciphertext, "tag": tag}
+            message = QCHTMessage(sender=self.name, message_data=message_data)
+            self.sendMessage(user, message)
+        else:
+            raise Exception("User {} does not exist on the network")
+
+    def get_message_history(self, user, count):
+        qchat_messages = self.mailbox.get_messages(user, count)
+        messages = []
+        for qm in qchat_messages:
+            if qm.sender != user:
+                raise Exception("Mailbox for {} contained message from {}".format(user, qchat_message.sender))
+            else:
+                user_key = self.userDB[user]['key']
+                nonce = qm.data['nonce']
+                ciphertext = qm.data['ciphertext']
+                tag = qm.data['tag']
+                message = QChatCipher(user_key).decrypt((nonce, ciphertext, tag))
+                messages.append(message)
+
+        return messages
 
