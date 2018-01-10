@@ -53,8 +53,8 @@ class QCHTMessage(Message):
     header = b'QCHT'
 
 
-class RQTUMessage(Message):
-    header = b'RQTU'
+class PUTUMessage(Message):
+    header = b'PUTU'
 
 
 class GETUMessage(Message):
@@ -71,7 +71,7 @@ class MessageFactory:
             Message.header: Message,
             RGSTMessage.header: RGSTMessage,
             AUTHMessage.header: AUTHMessage,
-            RQTUMessage.header: RQTUMessage,
+            PUTUMessage.header: PUTUMessage,
             GETUMessage.header: GETUMessage,
             QCHTMessage.header: QCHTMessage,
             BB84Message.header: BB84Message

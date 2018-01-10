@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 from sqlite3 import Error
 from QChat.log import QChatLogger
 
@@ -103,8 +104,20 @@ class DB:
         return self._db_operation("UPDATE {} SET {} WHERE {}".format(table_name, edit_info, search_criteria))
 
 
-class UserDB(dict):
-    pass
+class UserDB:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.db = {}
+
+    def getUser(self):
+        return self.db.get(user)
+
+    def hasUser(self, user):
+        return self.getUser(user) is not None
+
+    def getUserKey(self, user):
+        user_info = self.getUser(user)
+        return user_info
 
 
 class MessageDB(DB):

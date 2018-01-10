@@ -9,15 +9,22 @@ logger = QChatLogger(__name__)
 class ConnectionError(Exception):
     pass
 
+
+class DaemonThread(threading.Thread):
+    def __init__(self, target):
+        super().__init__(target=target, daemon=True)
+        self.start()
+
 class QChatConnection:
     def __init__(self, name, config):
+        self.lock = threading.Lock()
         self.cqc = CQCConnection(name)
         self.name = name
         self.host = config['host']
         self.port = config['port']
-        self.message_lock = threading.Lock()
         self.message_queue = []
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.thread = DaemonThread(target=self.listen)
 
     def __del__(self):
         if self.cqc:
@@ -25,7 +32,7 @@ class QChatConnection:
         if self.listening_socket:
             self.listening_socket.close()
 
-    def listen_for_connection(self):
+    def listen(self):
         self.listening_socket.bind((self.host, self.port))
         while True:
             logger.debug("Listening for incoming connection")
@@ -66,19 +73,19 @@ class QChatConnection:
             raise ConnectionError("Message data too long")
 
         logger.debug("Inserting message into queue")
-        self._insert_message_into_queue(MessageFactory().create_message(header, sender, message_data))
+        self._append_message_to_queue(MessageFactory().create_message(header, sender, message_data))
         conn.close()
 
-    def _insert_message_into_queue(self, message):
-        with self.message_lock:
+    def _append_message_to_queue(self, message):
+        with self.lock:
             self.message_queue.append(message)
 
-    def get_message(self):
-        if self.message_queue:
-            with self.message_lock:
-                return self.message_queue.pop(0)
-        else:
-            return None
+    def _pop_message_from_queue(self, message):
+        with self.lock:
+            return self.message_queue.pop(0)
+
+    def recv_message(self):
+        return _pop_message_from_queue if self.message_queue else None
 
     def send_message(self, host, port, message):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

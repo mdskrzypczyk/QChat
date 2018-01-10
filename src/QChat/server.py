@@ -5,7 +5,7 @@ from QChat.connection import QChatConnection
 from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from QChat.db import UserDB
 from QChat.mailbox import QChatMailbox
-from QChat.messages import GETUMessage, RQTUMessage, RGSTMessage, QCHTMessage
+from QChat.messages import GETUMessage, PUTUMessage, RGSTMessage, QCHTMessage
 
 
 class DaemonThread(threading.Thread):
@@ -17,32 +17,36 @@ class DaemonThread(threading.Thread):
 class QChatServer:
     def __init__(self, name, config):
         self.name=name
-        self.connection_lock = threading.Lock()
         self.connection = QChatConnection(name=name, config=config)
-        self.db_lock = threading.Lock()
-        self.userDB = UserDB()
         self.control_messages = defaultdict(list)
-        self.mailbox_lock = threading.Lock()
         self.mailbox = QChatMailbox()
-        self.initialize_mailbox()
+        self.userDB = UserDB()
+        self.message_processor = DaemonThread(target=self.read_from_connection)
+
+    def read_from_connection(self):
+        while True:
+            time.sleep(1)
+            message = self.connection.recv_message()
+            if message:
+                self.process_message(message)
 
     def process_message(self, message):
         if message.header == QCHTMessage.header:
-            self.mailbox.store_message(message.sender, message)
+            self.mailbox.storeMessage(message)
 
         elif message.header == RGSTMessage.header:
             self.registerUser(**message.data)
 
-        elif message.header == RQTUMessage.header:
+        elif message.header == GETUMessage.header:
             self.sendUserInfo(**message.data)
 
-        elif message.header == GETUMessage.header:
+        elif message.header == PUTUMessage.header:
             self.addUserInfo(**message.data)
 
         else:
             self.control_messages[message.sender].append(message)
 
-    def wait_for_control_message(self, header, user):
+    def _wait_for_control_message(self, header, user):
         while self.control_messages[user] == []:
             time.sleep(1)
         cm = self.control_messages[user].pop(0)
@@ -50,17 +54,6 @@ class QChatServer:
             raise Exception("Bad control message")
 
         return cm
-
-    def load_mailbox(self):
-        while True:
-            time.sleep(1)
-            message = self.connection.get_message()
-            if message:
-                self.process_message(message)
-
-    def initialize_mailbox(self):
-        self.connection_listener = DaemonThread(target=self.connection.listen_for_connection)
-        self.reader = DaemonThread(target=self.load_mailbox)
 
     def hasUser(self, user):
         return self.userDB.get(user) != None
@@ -141,9 +134,8 @@ class QChatServer:
             return self.userDB.keys()
 
     def send_qchat_message(self, user, plaintext):
-        if self._user_exists(user):
-            # Encrypt the message
-            user_key = self.userDB[user]['key']
+        if self.userDB.hasUser(user):
+            user_key = self.userDB.getUserKey(user)
             nonce, ciphertext, tag = QChatCipher(user_key).encrypt(message)
             message_data = {"nonce": nonce, "ciphertext": ciphertext, "tag": tag}
             message = QCHTMessage(sender=self.name, message_data=message_data)
