@@ -1,6 +1,6 @@
 import random
 import time
-from QChat.messages import BB84Message
+from QChat.messages import PTCLMessage, BB84Message
 
 
 class ProtocolException(Exception):
@@ -17,6 +17,17 @@ class QChatProtocol:
         self.n = n
         self.ctrl_msg_q = ctrl_msg_q
         self.peer_info = peer_info
+        self.role = role
+        if role == LEADER_ROLE:
+            self._lead_protocol()
+        elif role == FOLLOW_ROLE:
+            self._follow_protocol()
+
+    def _lead_protocol(self):
+        raise NotImplementedError
+
+    def _follow_protocol(self):
+        raise NotImplementedError
 
     def _wait_for_control_message(self, idle_timeout=2, message_type=None):
         wait_start = time.time()
@@ -36,10 +47,22 @@ class QChatProtocol:
 
 
 class BB84_Purified(QChatProtocol):
+    name = "BB84_PURIFIED"
+
+    def _lead_protocol(self):
+        self._send_control_message(message_data={"name": self.name, "n": self.n}, message_type=PTCLMessage)
+        response = self._wait_for_control_message(message_type=BB84Message)
+        if response.data["ACK"] != "ACK":
+            raise ProtocolException("Failed to establish leader/role")
+
+
+    def _follow_protocol(self):
+        self._send_control_message(message_data={"ACK": "ACK"}, message_type=BB84Message)
+
     def _distribute_bb84_states(self, eavesdropper="Eve"):
         x = []
         theta = []
-        while len(x) < n:
+        while len(x) < self.n:
             if eavesdropper:
                 q = self.connection.cqc.createEPR(eavesdropper)
             else:
@@ -114,12 +137,10 @@ class BB84_Purified(QChatProtocol):
 
     def execute(self):
         if self.role == LEADER_ROLE:
-            self._send_control_message(message_data={"CTRL": "INIT"}, message_type=BB84Message)
-            response = self.connection._wait_for_control_message(message_type=BB84Message)
             x, theta = self._distribute_bb84_states()
         else:
             x, theta = self._receive_bb84_states()
-            m = self.connection._wait_for_control_message(header=BB84Message.header, user=user)
+            m = self._wait_for_control_message(header=BB84Message.header, user=user)
         if m.data.get("message") != "States received":
             raise ProtocolException("Failed to transmit BB84 states")
 
@@ -134,3 +155,13 @@ class BB84_Purified(QChatProtocol):
         r = [random.randint(0, 1) for _ in x_remain]
         self._send_control_message(message_data={"r": r}, message_type=BB84Message)
         return self._extract_key(x_remain, r)
+
+
+class ProtocolFactory:
+    def __init__(self):
+        self.protocol_mapping = {
+            BB84_Purified.name: BB84_Purified
+        }
+
+    def createProtocol(self, name):
+        return self.protocol_mapping.get(name)

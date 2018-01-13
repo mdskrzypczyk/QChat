@@ -43,4 +43,8 @@ class QChatVerifier:
     def verify(self, data, sig):
         hash_obj = SHA256.new(data)
         verifier = DSS.new(self.pubkey, 'fips-186-3')
-        return verifier.verify(hash_obj, sig)
+        try:
+            verifier.verify(hash_obj, sig)
+            return True
+        except:
+            return False

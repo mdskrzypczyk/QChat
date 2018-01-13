@@ -64,6 +64,9 @@ class GETUMessage(Message):
 class BB84Message(Message):
     header = b'BB84'
 
+class PTCLMessage(Message):
+    header = b'PTCL'
+
 
 class MessageFactory:
     def __init__(self):
@@ -74,7 +77,8 @@ class MessageFactory:
             PUTUMessage.header: PUTUMessage,
             GETUMessage.header: GETUMessage,
             QCHTMessage.header: QCHTMessage,
-            BB84Message.header: BB84Message
+            BB84Message.header: BB84Message,
+            PTCLMessage.header: PTCLMessage
         }
 
     def create_message(self, header, sender, message_data):

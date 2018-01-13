@@ -5,8 +5,8 @@ from QChat.connection import QChatConnection
 from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from QChat.db import UserDB
 from QChat.mailbox import QChatMailbox
-from QChat.messages import GETUMessage, PUTUMessage, RGSTMessage, QCHTMessage
-from QChat.protocols import BB84_Purified
+from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage
+from QChat.protocols import ProtocolFactory, BB84_Purified, LEADER_ROLE, FOLLOW_ROLE
 
 
 class DaemonThread(threading.Thread):
@@ -46,8 +46,22 @@ class QChatServer:
         elif message.header == PUTUMessage.header:
             self.addUserInfo(**message.data)
 
+        elif message.header == PTCLMessage.header:
+            self._follow_protocol(message)
+
         else:
             self.control_message_queue[message.sender].append(message)
+
+    def _follow_protocol(self, message):
+        peer_info = {
+            "user": message.sender,
+        }
+        peer_info.update(self.getConnectionInfo(message.sender))
+
+        protocol_class = ProtocolFactory().createProtocol(name=message.data['name'])
+        p = protocol_class(peer_info, self.connection, message.data['n'], self.control_message_queue[message.sender],
+                           FOLLOW_ROLE)
+        p.execute()
 
     def _wait_for_control_message(self, header, user):
         while self.control_message_queue[user] == []:
@@ -79,11 +93,11 @@ class QChatServer:
             }
             peer_info.update(self.getConnectionInfo(user))
             p = protocol_class(peer_info=peer_info, connection=self.connection, n=key_size,
-                               ctrl_msg_q=self.control_message_queue[user])
+                               ctrl_msg_q=self.control_message_queue[user], role=LEADER_ROLE)
         return p.execute()
 
     def hasUser(self, user):
-        return self.userDB.get(user) != None
+        return self.userDB.hasUser(user)
 
     def addUserInfo(self, user, **kwargs):
         self.userDB.addUser(user, **kwargs)

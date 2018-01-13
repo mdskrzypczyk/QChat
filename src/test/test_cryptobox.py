@@ -25,4 +25,3 @@ class TestCryptoBox:
         test_data = b"Test data"
         sig = signer.sign(test_data)
         assert verifier.verify(test_data, sig)
-
