@@ -1,6 +1,7 @@
 from Crypto.Cipher import AES
 from Crypto.PublicKey import DSA
 from Crypto.Hash import SHA256
+from Crypto.Signature import DSS
 
 
 class QChatCipher:
@@ -26,18 +27,20 @@ class QChatSigner:
         self.key = DSA.generate(2048) if not key else key
 
     def get_pub(self):
-        return self.key.publickey().exportKey(self.key)
+        return self.key.publickey().exportKey()
 
     def sign(self, data):
         hash_obj = SHA256.new(data)
-        signature = self.key.sign(hash_obj)
+        signer = DSS.new(self.key, 'fips-186-3')
+        signature = signer.sign(hash_obj)
         return signature
 
 
 class QChatVerifier:
     def __init__(self, pubkey):
-        self.pubkey = pubkey
+        self.pubkey = DSA.import_key(pubkey)
 
-    def verify(self, data):
+    def verify(self, data, sig):
         hash_obj = SHA256.new(data)
-        return self.pubkey.verify(hash_obj)
+        verifier = DSS.new(self.pubkey, 'fips-186-3')
+        return verifier.verify(hash_obj, sig)

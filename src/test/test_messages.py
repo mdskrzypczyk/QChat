@@ -18,17 +18,15 @@ class TestMessage:
         assert test_message.header == Message.header
         assert test_message.sender == self.test_sender
         assert test_message.data == self.test_message_data
-        print(bytes(test_message.encode_message(), 'utf-8'))
-        print(bytes("MSSG" + "\x00"*11 + self.test_sender + "\x00\x00\x00!" + json.dumps(self.test_message_data), 'utf-8'))
-        assert test_message.encode_message() == "MSSG" + "\x00"*11 + self.test_sender + \
-                                                "\x00\x00\x00!" + json.dumps(self.test_message_data)
+        assert test_message.encode_message() == bytes("MSSG" + "\x00"*11 + self.test_sender +
+                                                      "\x00\x00\x00!" + json.dumps(self.test_message_data), 'utf-8')
 
         test_message = Message(self.test_sender, json.dumps(self.test_message_data))
         assert test_message.header == Message.header
         assert test_message.sender == self.test_sender
         assert test_message.data == self.test_message_data
-        assert test_message.encode_message() == "MSSG" + "\x00"*11 + self.test_sender + \
-                                                "\x00\x00\x00!" + json.dumps(self.test_message_data)
+        assert test_message.encode_message() == bytes("MSSG" + "\x00"*11 + self.test_sender +
+                                                      "\x00\x00\x00!" + json.dumps(self.test_message_data), 'utf-8')
 
         with pytest.raises(MalformedMessage):
             Message("a"*17, self.test_message_data)

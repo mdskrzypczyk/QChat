@@ -123,7 +123,12 @@ class UserDB:
         return self._get_user(user).get('message_key')
 
     def getConnectionInfo(self, user):
-        return self._get_user(user).get('connection')
+        user_info = self._get_user(user)
+        connection_info = {
+            "host": user_info["host"],
+            "port": user_info["port"]
+        }
+        return connection_info
 
     def deleteUserInfo(self, user, fields):
         user_info = self.db._get_user(user)

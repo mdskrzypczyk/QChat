@@ -36,7 +36,7 @@ class TestQChatConnection:
         assert connection.name == self.test_name
         assert connection.host == self.test_config1['host']
         assert connection.port == self.test_config1['port']
-        assert type(connection.message_lock) == type(threading.Lock())
+        assert type(connection.lock) == type(threading.Lock())
         assert connection.message_queue == []
 
     def test_get_message(self):

@@ -60,6 +60,3 @@ class TestDB:
 
 class TestUserDB:
     pass
-
-class TestMessageDB:
-    pass

@@ -18,6 +18,8 @@ class DaemonThread(threading.Thread):
 class QChatConnection:
     def __init__(self, name, config):
         self.lock = threading.Lock()
+        self.cqc = None
+        self.listening_socket = None
         self.cqc = CQCConnection(name)
         self.name = name
         self.host = config['host']
@@ -87,12 +89,12 @@ class QChatConnection:
         with self.lock:
             self.message_queue.append(message)
 
-    def _pop_message_from_queue(self, message):
+    def _pop_message_from_queue(self):
         with self.lock:
             return self.message_queue.pop(0)
 
     def recv_message(self):
-        return _pop_message_from_queue if self.message_queue else None
+        return self._pop_message_from_queue() if self.message_queue else None
 
     def send_message(self, host, port, message):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

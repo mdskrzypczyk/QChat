@@ -6,6 +6,7 @@ from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from QChat.db import UserDB
 from QChat.mailbox import QChatMailbox
 from QChat.messages import GETUMessage, PUTUMessage, RGSTMessage, QCHTMessage
+from QChat.protocols import BB84_Purified
 
 
 class DaemonThread(threading.Thread):
@@ -18,7 +19,7 @@ class QChatServer:
     def __init__(self, name, config):
         self.name=name
         self.connection = QChatConnection(name=name, config=config)
-        self.control_messages = defaultdict(list)
+        self.control_message_queue = defaultdict(list)
         self.mailbox = QChatMailbox()
         self.signer = QChatSigner()
         self.userDB = UserDB()
@@ -46,12 +47,12 @@ class QChatServer:
             self.addUserInfo(**message.data)
 
         else:
-            self.control_messages[message.sender].append(message)
+            self.control_message_queue[message.sender].append(message)
 
     def _wait_for_control_message(self, header, user):
-        while self.control_messages[user] == []:
+        while self.control_message_queue[user] == []:
             time.sleep(1)
-        cm = self.control_messages[user].pop(0)
+        cm = self.control_message_queue[user].pop(0)
         if cm.header != header:
             raise Exception("Bad control message")
 
@@ -68,30 +69,40 @@ class QChatServer:
         }
         return reg_data
 
-    def _send_message(self, message):
-        self.connection.send_message(message.encode_message())
+    def _send_message(self, host, port, message):
+        self.connection.send_message(host, port, message.encode_message())
+
+    def _establish_key(self, user, key_size, protocol_class=BB84_Purified):
+        if self.hasUser(user):
+            peer_info = {
+                "user": user,
+            }
+            peer_info.update(self.getConnectionInfo(user))
+            p = protocol_class(peer_info=peer_info, connection=self.connection, n=key_size,
+                               ctrl_msg_q=self.control_message_queue[user])
+        return p.execute()
 
     def hasUser(self, user):
         return self.userDB.get(user) != None
 
     def addUserInfo(self, user, **kwargs):
-        self.userDB.addUser(user, kwargs)
+        self.userDB.addUser(user, **kwargs)
 
-    def registerUser(self, user, host, port, pub):
+    def registerUser(self, user, connection, pub):
         if self.userDB.hasUser(user):
             raise Exception("User {} already registered".format(user))
         else:
-            self.addUserInfo(user, host=host, port=port, pub=bytes(pub, 'utf-8'))
+            self.addUserInfo(user, pub=bytes(pub, 'utf-8'), **connection)
 
     def getPublicKey(self):
-        return self.userDB.getUserKey(user=self.name)
+        return self.userDB.getPublicKey(user=self.name)
 
     def getPublicInfo(self, user):
         return self.userDB.getPublicUserInfo(user)
 
     def sendRegistration(self, host, port):
         message = RGSTMessage(sender=self.name, message_data=self._get_registration_data())
-        self._send_message(message)
+        self._send_message(host, port, message)
 
     def getConnectionInfo(self, user):
         return self.userDB.getConnectionInfo(user)
@@ -109,25 +120,25 @@ class QChatServer:
         self.connection.send_message(host, port, m.encode_message())
 
     def getMailboxMessage(self, user):
-        if self.mailbox[user]:
-            return self.mailbox[user].pop(0)
+        return self.mailbox.getMessage(user)
 
     def sendMessage(self, user, message):
-        if user not in self.userDB.keys():
+        if not self.userDB.hasUser(user):
             raise Exception("No known route to {}".format(user))
-        connection_info = self.userDB[user]
+
+        connection_info = self.userDB.getConnectionInfo(user)
         host = connection_info['host']
         port = connection_info['port']
         self.connection.send_message(host, port, message.encode_message())
 
-    def establishKey(self, user):
-        key = ...
-        self.userDB[user]['key'] = key
-
     def createQChatMessage(self, user, plaintext):
         user_key = self.userDB.getMessageKey(user)
         nonce, ciphertext, tag = QChatCipher(user_key).encrypt(plaintext)
-        message_data = {"nonce": nonce, "ciphertext": ciphertext, "tag": tag}
+        message_data = {
+            "nonce": str(nonce),
+            "ciphertext": str(ciphertext),
+            "tag": str(tag)
+        }
         message = QCHTMessage(sender=self.name, message_data=message_data)
         return message
 
@@ -143,7 +154,7 @@ class QChatServer:
         messages = []
         for qm in qchat_messages:
             if qm.sender != user:
-                raise Exception("Mailbox for {} contained message from {}".format(user, qchat_message.sender))
+                raise Exception("Mailbox for {} contained message from {}".format(user, qm.sender))
             else:
                 user_key = self.userDB[user]['key']
                 nonce = qm.data['nonce']
