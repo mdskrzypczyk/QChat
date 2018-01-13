@@ -4,7 +4,6 @@ from QChat.log import QChatLogger
 from QChat.messages import HEADER_LENGTH, PAYLOAD_SIZE, MAX_SENDER_LENGTH, MessageFactory
 from SimulaQron.cqc.pythonLib.cqc import *
 
-logger = QChatLogger(__name__)
 
 class ConnectionError(Exception):
     pass
@@ -18,6 +17,7 @@ class DaemonThread(threading.Thread):
 class QChatConnection:
     def __init__(self, name, config):
         self.lock = threading.Lock()
+        self.logger = QChatLogger(__name__)
         self.cqc = None
         self.listening_socket = None
         self.cqc = CQCConnection(name)
@@ -44,10 +44,10 @@ class QChatConnection:
     def listen(self):
         self.listening_socket.bind((self.host, self.port))
         while True:
-            logger.debug("Listening for incoming connection")
+            self.logger.debug("Listening for incoming connection")
             self.listening_socket.listen(1)
             conn, addr = self.listening_socket.accept()
-            logger.debug("Got connection from {}".format(addr))
+            self.logger.debug("Got connection from {}".format(addr))
 
             # Thread this
             t = threading.Thread(target=self._handle_connection, args=(conn, addr))
@@ -81,7 +81,7 @@ class QChatConnection:
         if len(message_data) > data_length or conn.recv(1):
             raise ConnectionError("Message data too long")
 
-        logger.debug("Inserting message into queue")
+        self.logger.debug("Inserting message into queue")
         self._append_message_to_queue(MessageFactory().create_message(header, sender, message_data))
         conn.close()
 
@@ -101,7 +101,7 @@ class QChatConnection:
         s.connect((host, port))
         s.sendall(message)
         s.close()
-        logger.debug("Sent message to {}:".format(host, port))
+        self.logger.debug("Sent message to {}:{}".format(host, port))
 
     def send_qubit(self, user):
         pass

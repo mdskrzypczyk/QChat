@@ -1,22 +1,12 @@
-import os
-import json
 from QChat.server import QChatServer
-from Crypto.Signature import PKCS1_v1_5
-from Crypto.Hash import SHA256
-
-
-def load_config(user):
-    path = os.path.abspath(__file__)
-    config_path = os.path.dirname(path) + "/config.json"
-    with open(config_path) as f:
-        config = jsonload(f)
-    return config[user] if config.get(user) else None
 
 
 class QChatClient:
-    def __init__(self, user: str):
-        self.server_config = load_config(user)
-        self.server = QChatServer(user, self.server_config)
+    def logOut(self):
+        self.server.close()
+
+    def logIn(self, user):
+        self.server = QChatServer(user)
 
     def getContacts(self, verbose=False):
         return self.server.get_contact_info(verbose)

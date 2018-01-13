@@ -1,10 +1,12 @@
 import threading
 import time
 import json
+import os
 from collections import defaultdict
 from QChat.connection import QChatConnection
 from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from QChat.db import UserDB
+from QChat.log import QChatLogger
 from QChat.mailbox import QChatMailbox
 from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage
 from QChat.protocols import ProtocolFactory, QChatKeyProtocol, BB84_Purified, LEADER_ROLE, FOLLOW_ROLE
@@ -19,6 +21,7 @@ class DaemonThread(threading.Thread):
 class QChatServer:
     def __init__(self, name):
         self.name=name
+        self.logger = QChatLogger(__name__)
         self.config = self._load_server_config(self.name)
         root_server_config = self._load_server_config("Root Server")
         self.root_host = root_server_config["host"]
@@ -35,19 +38,24 @@ class QChatServer:
     def _register_with_root_server(self):
         try:
             if self.config["host"] == self.root_host and self.config["port"] == self.root_port:
-                print("I am root server")
+                self.logger.debug("Am root server")
             else:
+                self.logger.debug("Sending registration to {}:{}".format(self.root_host, self.root_port))
                 self.sendRegistration(host=self.root_host, port=self.root_port)
         except:
-            print("Could not connect to root server, try later")
+            self.logger.info("Failed to register with root server, is it running?")
 
     def _load_server_config(self, name):
-        config_path = "Qchat/config.json"
+        path = os.path.abspath(__file__)
+        config_path = os.path.dirname(path) + "/config.json"
+        self.logger.debug("Loading server config {}".format(config_path))
         with open(config_path) as f:
             base_config = json.load(f)
+            self.logger.debug("Config: {}".format(base_config))
         return base_config.get(name)
 
     def read_from_connection(self):
+        self.logger.debug("Processing incoming messages")
         while True:
             time.sleep(0.1)
             message = self.connection.recv_message()
@@ -55,7 +63,7 @@ class QChatServer:
                 self.process_message(message)
 
     def process_message(self, message):
-        print("Got message {}, {}, {}".format(message.header, message.sender, message.data))
+        self.logger.debug("Processing {} message from {}: {}".format(message.header, message.sender, message.data))
         if message.header == QCHTMessage.header:
             self.mailbox.storeMessage(message)
 
@@ -69,25 +77,33 @@ class QChatServer:
             self.addUserInfo(**message.data)
 
         elif message.header == PTCLMessage.header:
+            if not self.userDB.hasUser(message.sender):
+                self.requestUserInfo(message.sender)
             t = threading.Thread(target=self._follow_protocol, args=(message,))
             t.start()
 
         else:
             self.control_message_queue[message.sender].append(message)
 
+        self.logger.debug("Completed processing message")
+
     def _follow_protocol(self, message):
         peer_info = {
             "user": message.sender,
         }
         peer_info.update(self.getConnectionInfo(message.sender))
+        self.logger.debug("Following protocol with peer info: {}".format(peer_info))
 
         protocol_class = ProtocolFactory().createProtocol(name=message.data['name'])
         p = protocol_class(peer_info, self.connection, message.data['n'], self.control_message_queue[message.sender],
                            FOLLOW_ROLE)
+
         if isinstance(p, QChatKeyProtocol):
+            self.logger.debug("Establishing key with {}".format(message.sender))
             self.userDB.changeUserInfo(message.sender, message_key=p.execute())
 
     def _wait_for_control_message(self, header, user):
+        self.logger.debug("Waiting for control message")
         while self.control_message_queue[user] == []:
             time.sleep(1)
         cm = self.control_message_queue[user].pop(0)
@@ -105,6 +121,7 @@ class QChatServer:
             },
             "pub": str(self.getPublicKey(), 'utf-8'),
         }
+        self.logger.debug("Constructing registration data: {}".format(reg_data))
         return reg_data
 
     def _send_message(self, host, port, message):
@@ -125,7 +142,6 @@ class QChatServer:
         return self.userDB.hasUser(user)
 
     def addUserInfo(self, user, **kwargs):
-        print(user, kwargs)
         self.userDB.addUser(user, **kwargs)
 
     def registerUser(self, user, connection, pub):
@@ -163,13 +179,15 @@ class QChatServer:
         }
         m = GETUMessage(sender=self.name, message_data=request_message_data)
         self.connection.send_message(server_host, server_port, m.encode_message())
+        while not self.userDB.hasUser(user):
+            pass
 
     def getMailboxMessage(self, user):
         return self.mailbox.getMessage(user)
 
     def sendMessage(self, user, message):
         if not self.userDB.hasUser(user):
-            raise Exception("No known route to {}".format(user))
+            self.requestUserInfo(user)
 
         connection_info = self.userDB.getConnectionInfo(user)
         host = connection_info['host']
@@ -178,6 +196,9 @@ class QChatServer:
 
     def createQChatMessage(self, user, plaintext):
         user_key = self.userDB.getMessageKey(user)
+        if not user_key:
+            self._establish_key(user, 128)
+            user_key=self.userDB.getMessageKey(user)
         nonce, ciphertext, tag = QChatCipher(user_key).encrypt(plaintext)
         message_data = {
             "nonce": str(nonce),
@@ -188,11 +209,11 @@ class QChatServer:
         return message
 
     def sendQChatMessage(self, user, plaintext):
-        if self.userDB.hasUser(user):
-            message = self.createQChatMessage(user, plaintext)
-            self.sendMessage(user, message)
-        else:
-            raise Exception("User {} does not exist on the network")
+        if not self.userDB.hasUser(user):
+            self.requestUserInfo(user)
+
+        message = self.createQChatMessage(user, plaintext)
+        self.sendMessage(user, message)
 
     def get_message_history(self, user, count):
         qchat_messages = self.mailbox.get_messages(user, count)
