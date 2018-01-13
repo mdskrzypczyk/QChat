@@ -6,7 +6,7 @@ from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from QChat.db import UserDB
 from QChat.mailbox import QChatMailbox
 from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage
-from QChat.protocols import ProtocolFactory, BB84_Purified, LEADER_ROLE, FOLLOW_ROLE
+from QChat.protocols import ProtocolFactory, QChatKeyProtocol, BB84_Purified, LEADER_ROLE, FOLLOW_ROLE
 
 
 class DaemonThread(threading.Thread):
@@ -28,12 +28,13 @@ class QChatServer:
 
     def read_from_connection(self):
         while True:
-            time.sleep(1)
+            time.sleep(0.1)
             message = self.connection.recv_message()
             if message:
                 self.process_message(message)
 
     def process_message(self, message):
+        print("Got message {}, {}, {}".format(message.header, message.sender, message.data))
         if message.header == QCHTMessage.header:
             self.mailbox.storeMessage(message)
 
@@ -47,7 +48,8 @@ class QChatServer:
             self.addUserInfo(**message.data)
 
         elif message.header == PTCLMessage.header:
-            self._follow_protocol(message)
+            t = threading.Thread(target=self._follow_protocol, args=(message,))
+            t.start()
 
         else:
             self.control_message_queue[message.sender].append(message)
@@ -61,7 +63,8 @@ class QChatServer:
         protocol_class = ProtocolFactory().createProtocol(name=message.data['name'])
         p = protocol_class(peer_info, self.connection, message.data['n'], self.control_message_queue[message.sender],
                            FOLLOW_ROLE)
-        p.execute()
+        if isinstance(p, QChatKeyProtocol):
+            self.userDB.changeUserInfo(message.sender, message_key=p.execute())
 
     def _wait_for_control_message(self, header, user):
         while self.control_message_queue[user] == []:
@@ -94,7 +97,8 @@ class QChatServer:
             peer_info.update(self.getConnectionInfo(user))
             p = protocol_class(peer_info=peer_info, connection=self.connection, n=key_size,
                                ctrl_msg_q=self.control_message_queue[user], role=LEADER_ROLE)
-        return p.execute()
+
+        self.userDB.changeUserInfo(user, message_key=p.execute())
 
     def hasUser(self, user):
         return self.userDB.hasUser(user)

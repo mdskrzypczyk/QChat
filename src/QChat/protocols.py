@@ -29,7 +29,7 @@ class QChatProtocol:
     def _follow_protocol(self):
         raise NotImplementedError
 
-    def _wait_for_control_message(self, idle_timeout=2, message_type=None):
+    def _wait_for_control_message(self, idle_timeout=IDLE_TIMEOUT, message_type=None):
         wait_start = time.time()
         while not self.ctrl_msg_q:
             curr_time = time.time()
@@ -45,8 +45,20 @@ class QChatProtocol:
         self.connection.send_message(host=self.peer_info["host"], port=self.peer_info["port"],
                                      message=message.encode_message())
 
+    def exchange_messages(self, message_data, message_type):
+        if self.role == LEADER_ROLE:
+            self._send_control_message(message_data=message_data, message_type=message_type)
+            return self._wait_for_control_message(message_type=message_type)
+        else:
+            m = self._wait_for_control_message(message_type=message_type)
+            self._send_control_message(message_data=message_data, message_type=message_type)
+            return m
 
-class BB84_Purified(QChatProtocol):
+
+class QChatKeyProtocol(QChatProtocol):
+    pass
+
+class BB84_Purified(QChatKeyProtocol):
     name = "BB84_PURIFIED"
 
     def _lead_protocol(self):
@@ -59,7 +71,7 @@ class BB84_Purified(QChatProtocol):
     def _follow_protocol(self):
         self._send_control_message(message_data={"ACK": "ACK"}, message_type=BB84Message)
 
-    def _distribute_bb84_states(self, eavesdropper="Eve"):
+    def _distribute_bb84_states(self, eavesdropper=None):
         x = []
         theta = []
         while len(x) < self.n:
@@ -78,9 +90,9 @@ class BB84_Purified(QChatProtocol):
             x.append(q.measure())
             theta.append(basisflip)
 
-        ack = self._wait_for_control_message(idle_timeout=2, message_type=BB84Message)
-        if ack.data["ack"] != True:
-            raise ProtocolException("Error distributing BB84 states")
+            ack = self._wait_for_control_message(message_type=BB84Message)
+            if ack.data["ack"] != True:
+                raise ProtocolException("Error distributing BB84 states")
 
         return x, theta
 
@@ -88,7 +100,7 @@ class BB84_Purified(QChatProtocol):
         x = []
         theta = []
         while len(x) < self.n:
-            q = self.connection.cqc.recvQubit()
+            q = self.connection.cqc.recvEPR()
             basisflip = random.randint(0, 1)
             if basisflip:
                 q.H()
@@ -96,13 +108,12 @@ class BB84_Purified(QChatProtocol):
             theta.append(basisflip)
             x.append(q.measure())
 
-        self._send_control_message(message_data={"ack": True}, message_type=BB84Message)
+            self._send_control_message(message_data={"ack": True}, message_type=BB84Message)
         return x, theta
 
     def _filter_theta(self, x, theta):
         x_remain = []
-        self._send_control_message(message_data={"theta": theta}, message_type=BB84Message)
-        response = self._wait_for_control_message(idle_timeout=1, message_type=BB84Message)
+        response = self.exchange_messages(message_data={"theta": theta}, message_type=BB84Message)
         theta_hat = response.data["theta"]
         for bit, basis, basis_hat in zip(x, theta, theta_hat):
             if basis == basis_hat:
@@ -114,16 +125,31 @@ class BB84_Purified(QChatProtocol):
         test_bits = []
         test_indices = []
 
-        while len(test_indices) < num_test_bits and len(x) > 0:
-            index = random.randint(0, len(x) - 1)
-            test_bits.append(x.pop(index))
-            test_indices.append(index)
+        if self.role == LEADER_ROLE:
+            while len(test_indices) < num_test_bits and len(x) > 0:
+                index = random.randint(0, len(x) - 1)
+                test_bits.append(x.pop(index))
+                test_indices.append(index)
 
-        self._send_control_message(message_data={"test_indices": test_indices}, message_type=BB84Message)
-        response = self._wait_for_control_message(idle_timeout=2, message_type=BB84Message)
-        target_test_bits = response.data["test_bits"]
-        self._send_control_message(message_data={"test_bits": test_bits}, message_type=BB84Message)
-        print("Alice target_test_bits: ", target_test_bits)
+            self._send_control_message(message_data={"test_indices": test_indices}, message_type=BB84Message)
+            response = self._wait_for_control_message(message_type=BB84Message)
+            target_test_bits = response.data["test_bits"]
+            self._send_control_message(message_data={"test_bits": test_bits}, message_type=BB84Message)
+            m = self._wait_for_control_message(message_type=BB84Message)
+            if not m.data["ack"]:
+                raise ProtocolException("Failed to distribute test information")
+
+        elif self.role == FOLLOW_ROLE:
+            m = self._wait_for_control_message(message_type=BB84Message)
+            test_indices = m.data["test_indices"]
+            for index in test_indices:
+                test_bits.append(x.pop(index))
+
+            self._send_control_message(message_data={"test_bits": test_bits}, message_type=BB84Message)
+            m = self._wait_for_control_message(message_type=BB84Message)
+            target_test_bits = m.data["test_bits"]
+            self._send_control_message(message_data={"ack": True}, message_type=BB84Message)
+
 
         num_error = 0
         for t1, t2 in zip(test_bits, target_test_bits):
@@ -140,9 +166,6 @@ class BB84_Purified(QChatProtocol):
             x, theta = self._distribute_bb84_states()
         else:
             x, theta = self._receive_bb84_states()
-            m = self._wait_for_control_message(header=BB84Message.header, user=user)
-        if m.data.get("message") != "States received":
-            raise ProtocolException("Failed to transmit BB84 states")
 
         x_remain = self._filter_theta(x=x, theta=theta)
 
@@ -152,8 +175,12 @@ class BB84_Purified(QChatProtocol):
         if error_rate > 1:
             raise RuntimeError("Error rate of {}, aborting protocol")
 
-        r = [random.randint(0, 1) for _ in x_remain]
-        self._send_control_message(message_data={"r": r}, message_type=BB84Message)
+        if self.role == LEADER_ROLE:
+            r = [random.randint(0, 1) for _ in x_remain]
+            self._send_control_message(message_data={"r": r}, message_type=BB84Message)
+        elif self.role == FOLLOW_ROLE:
+            m = self._wait_for_control_message(message_type=BB84Message)
+            r = m.data["r"]
         return self._extract_key(x_remain, r)
 
 

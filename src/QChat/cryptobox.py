@@ -24,7 +24,7 @@ class QChatCipher:
 
 class QChatSigner:
     def __init__(self, key=None):
-        self.key = DSA.generate(2048) if not key else key
+        self.key = DSA.generate(1024) if not key else key
 
     def get_pub(self):
         return self.key.publickey().exportKey()
