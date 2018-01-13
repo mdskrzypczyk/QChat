@@ -1,5 +1,6 @@
 import threading
 import time
+import json
 from collections import defaultdict
 from QChat.connection import QChatConnection
 from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
@@ -16,15 +17,35 @@ class DaemonThread(threading.Thread):
 
 
 class QChatServer:
-    def __init__(self, name, config):
+    def __init__(self, name):
         self.name=name
-        self.connection = QChatConnection(name=name, config=config)
+        self.config = self._load_server_config(self.name)
+        root_server_config = self._load_server_config("Root Server")
+        self.root_host = root_server_config["host"]
+        self.root_port = root_server_config["port"]
+        self.connection = QChatConnection(name=name, config=self.config)
         self.control_message_queue = defaultdict(list)
         self.mailbox = QChatMailbox()
         self.signer = QChatSigner()
         self.userDB = UserDB()
         self.userDB.addUser(user=self.name, pub=self.signer.get_pub(), **self.connection.get_connection_info())
         self.message_processor = DaemonThread(target=self.read_from_connection)
+        self._register_with_root_server()
+
+    def _register_with_root_server(self):
+        try:
+            if self.config["host"] == self.root_host and self.config["port"] == self.root_port:
+                print("I am root server")
+            else:
+                self.sendRegistration(host=self.root_host, port=self.root_port)
+        except:
+            print("Could not connect to root server, try later")
+
+    def _load_server_config(self, name):
+        config_path = "Qchat/config.json"
+        with open(config_path) as f:
+            base_config = json.load(f)
+        return base_config.get(name)
 
     def read_from_connection(self):
         while True:
@@ -104,6 +125,7 @@ class QChatServer:
         return self.userDB.hasUser(user)
 
     def addUserInfo(self, user, **kwargs):
+        print(user, kwargs)
         self.userDB.addUser(user, **kwargs)
 
     def registerUser(self, user, connection, pub):
@@ -116,7 +138,10 @@ class QChatServer:
         return self.userDB.getPublicKey(user=self.name)
 
     def getPublicInfo(self, user):
-        return self.userDB.getPublicUserInfo(user)
+        pub_info = dict(self.userDB.getPublicUserInfo(user))
+        pub_info["pub"] = str(pub_info["pub"], 'utf-8')
+        pub_info["user"] = user
+        return pub_info
 
     def sendRegistration(self, host, port):
         message = RGSTMessage(sender=self.name, message_data=self._get_registration_data())
@@ -125,17 +150,19 @@ class QChatServer:
     def getConnectionInfo(self, user):
         return self.userDB.getConnectionInfo(user)
 
-    def sendUserInfo(self, user, host, port):
-        m = GETUMessage(sender=self.name, message_data=self.getPublicInfo(user))
-        self.connection.send_message(host=host, port=port, message=m.encode_message())
+    def sendUserInfo(self, user, connection_info):
+        message = RGSTMessage(sender=self.name, message_data=self.getPublicInfo(user))
+        self._send_message(connection_info["host"], connection_info["port"], message)
 
-    def requestUserInfo(self, user, host, port):
+    def requestUserInfo(self, user, root=True, host=None, port=None):
+        server_host = self.root_host if root else host
+        server_port = self.root_port if root else port
         request_message_data = {
             "user": user,
             "connection_info": self.connection.get_connection_info()
         }
-        m = PUTUMessage(sender=self.name, message_data=request_message_data)
-        self.connection.send_message(host, port, m.encode_message())
+        m = GETUMessage(sender=self.name, message_data=request_message_data)
+        self.connection.send_message(server_host, server_port, m.encode_message())
 
     def getMailboxMessage(self, user):
         return self.mailbox.getMessage(user)

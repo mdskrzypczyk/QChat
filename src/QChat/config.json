@@ -1,0 +1,36 @@
+{
+  "Alice": {
+    "host": "localhost",
+    "port": 8000,
+    "type": "client",
+    "cqc_relay": "Eve"
+  },
+  "Bob": {
+    "host": "localhost",
+    "port": 8001,
+    "type": "client",
+    "cqc_relay": "Eve"
+  },
+  "Charlie": {
+    "host": "localhost",
+    "port": 8002,
+    "type": "client",
+    "cqc_relay": null
+  },
+  "David": {
+    "host": "localhost",
+    "port": 8003,
+    "type": "server",
+    "cqc_relay": null
+  },
+  "Eve": {
+    "host": "localhost",
+    "port": 8004,
+    "type": "relay",
+    "cqc_relay": null
+  },
+  "Root Server": {
+    "host": "localhost",
+    "port": 8004
+  }
+}
