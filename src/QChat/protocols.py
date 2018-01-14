@@ -85,9 +85,6 @@ class BB84_Purified(QChatKeyProtocol):
             else:
                 q = self.connection.cqc.createEPR(self.peer_info["user"])
 
-            # bitflip = random.randint(0, 1)
-            # if bitflip:
-            #     q.X()
             basisflip = random.randint(0, 1)
             if basisflip:
                 q.H()
