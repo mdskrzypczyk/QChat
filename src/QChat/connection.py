@@ -36,8 +36,10 @@ class QChatConnection:
 
     def get_connection_info(self):
         info = {
-            "host": self.host,
-            "port": self.port
+            "connection": {
+                "host": self.host,
+                "port": self.port
+            }
         }
         return info
 
@@ -82,6 +84,7 @@ class QChatConnection:
             raise ConnectionError("Message data too long")
 
         self.logger.debug("Inserting message into queue")
+        self.logger.debug("{} {} {}".format(header, sender, message_data))
         self._append_message_to_queue(MessageFactory().create_message(header, sender, message_data))
         conn.close()
 
@@ -102,6 +105,7 @@ class QChatConnection:
         s.sendall(message)
         s.close()
         self.logger.debug("Sent message to {}:{}".format(host, port))
+        self.logger.debug("{}".format(message))
 
     def send_qubit(self, user):
         pass

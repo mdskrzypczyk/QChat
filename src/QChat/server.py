@@ -57,30 +57,36 @@ class QChatServer:
     def read_from_connection(self):
         self.logger.debug("Processing incoming messages")
         while True:
-            time.sleep(0.1)
             message = self.connection.recv_message()
             if message:
-                self.process_message(message)
+                self.start_process_thread(message)
+
+    def start_process_thread(self, message):
+        t = threading.Thread(target=self.process_message, args=(message,))
+        t.start()
 
     def process_message(self, message):
         self.logger.debug("Processing {} message from {}: {}".format(message.header, message.sender, message.data))
         if message.header == QCHTMessage.header:
             self.mailbox.storeMessage(message)
+            self.logger.info("New QChat message from {}".format(message.sender))
 
         elif message.header == RGSTMessage.header:
             self.registerUser(**message.data)
+            self.logger.info("Registered new contact {}".format(message.sender))
 
         elif message.header == GETUMessage.header:
             self.sendUserInfo(**message.data)
+            self.logger.debug("Sent {} user info to {}".format(message.data["user"], message.sender))
 
         elif message.header == PUTUMessage.header:
             self.addUserInfo(**message.data)
+            self.logger.info("Got {} user info".format(message.data["user"]))
 
         elif message.header == PTCLMessage.header:
             if not self.userDB.hasUser(message.sender):
                 self.requestUserInfo(message.sender)
-            t = threading.Thread(target=self._follow_protocol, args=(message,))
-            t.start()
+            self._follow_protocol(message)
 
         else:
             self.control_message_queue[message.sender].append(message)
@@ -115,12 +121,9 @@ class QChatServer:
     def _get_registration_data(self):
         reg_data = {
             "user": self.name,
-            "connection": {
-                "host": self.connection.host,
-                "port": self.connection.port
-            },
-            "pub": str(self.getPublicKey(), 'utf-8'),
+            "pub": str(self.getPublicKey(), 'utf-8')
         }
+        reg_data.update(self.connection.get_connection_info())
         self.logger.debug("Constructing registration data: {}".format(reg_data))
         return reg_data
 
@@ -142,13 +145,14 @@ class QChatServer:
         return self.userDB.hasUser(user)
 
     def addUserInfo(self, user, **kwargs):
+        self.logger.debug("Adding to user {} info {}".format(user, kwargs))
         self.userDB.addUser(user, **kwargs)
 
     def registerUser(self, user, connection, pub):
         if self.userDB.hasUser(user):
             raise Exception("User {} already registered".format(user))
         else:
-            self.addUserInfo(user, pub=bytes(pub, 'utf-8'), **connection)
+            self.addUserInfo(user, pub=bytes(pub, 'utf-8'), connection=connection)
 
     def getPublicKey(self):
         return self.userDB.getPublicKey(user=self.name)
@@ -166,17 +170,18 @@ class QChatServer:
     def getConnectionInfo(self, user):
         return self.userDB.getConnectionInfo(user)
 
-    def sendUserInfo(self, user, connection_info):
-        message = RGSTMessage(sender=self.name, message_data=self.getPublicInfo(user))
-        self._send_message(connection_info["host"], connection_info["port"], message)
+    def sendUserInfo(self, user, connection):
+        self.logger.debug("Sending {} info to {}".format(user, connection))
+        message = PUTUMessage(sender=self.name, message_data=self.getPublicInfo(user))
+        self._send_message(connection["host"], connection["port"], message)
 
     def requestUserInfo(self, user, root=True, host=None, port=None):
         server_host = self.root_host if root else host
         server_port = self.root_port if root else port
         request_message_data = {
             "user": user,
-            "connection_info": self.connection.get_connection_info()
         }
+        request_message_data.update(self.connection.get_connection_info())
         m = GETUMessage(sender=self.name, message_data=request_message_data)
         self.connection.send_message(server_host, server_port, m.encode_message())
         while not self.userDB.hasUser(user):
@@ -197,13 +202,13 @@ class QChatServer:
     def createQChatMessage(self, user, plaintext):
         user_key = self.userDB.getMessageKey(user)
         if not user_key:
-            self._establish_key(user, 128)
+            self._establish_key(user, 10)
             user_key=self.userDB.getMessageKey(user)
-        nonce, ciphertext, tag = QChatCipher(user_key).encrypt(plaintext)
+        nonce, ciphertext, tag = QChatCipher(user_key).encrypt(bytes(plaintext, 'utf-8'))
         message_data = {
-            "nonce": str(nonce),
-            "ciphertext": str(ciphertext),
-            "tag": str(tag)
+            "nonce": nonce.decode("ISO-8859-1"),
+            "ciphertext": ciphertext.decode("ISO-8859-1"),
+            "tag": tag.decode("ISO-8859-1")
         }
         message = QCHTMessage(sender=self.name, message_data=message_data)
         return message
@@ -216,17 +221,18 @@ class QChatServer:
         self.sendMessage(user, message)
 
     def get_message_history(self, user, count):
-        qchat_messages = self.mailbox.get_messages(user, count)
         messages = []
-        for qm in qchat_messages:
+        for _ in range(count):
+            qm = self.mailbox.getMessage(user)
             if qm.sender != user:
                 raise Exception("Mailbox for {} contained message from {}".format(user, qm.sender))
             else:
-                user_key = self.userDB[user]['key']
-                nonce = qm.data['nonce']
-                ciphertext = qm.data['ciphertext']
-                tag = qm.data['tag']
+                user_key = self.userDB.getMessageKey(user)
+                nonce = qm.data['nonce'].encode("ISO-8859-1")
+                ciphertext = qm.data['ciphertext'].encode("ISO-8859-1")
+                tag = qm.data['tag'].encode("ISO-8859-1")
                 message = QChatCipher(user_key).decrypt((nonce, ciphertext, tag))
+                message.decode("ISO-8859-1")
                 messages.append(message)
 
         return messages

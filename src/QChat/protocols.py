@@ -58,6 +58,9 @@ class QChatProtocol:
 class QChatKeyProtocol(QChatProtocol):
     pass
 
+class QChatMessageProtocol(QChatProtocol):
+    pass
+
 class BB84_Purified(QChatKeyProtocol):
     name = "BB84_PURIFIED"
 
@@ -159,7 +162,8 @@ class BB84_Purified(QChatKeyProtocol):
         return (num_error / num_test_bits)
 
     def _extract_key(self, x, r):
-        return (sum([xj * rj for xj, rj in zip(x, r)]) % 2)
+        k = (sum([xj * rj for xj, rj in zip(x, r)]) % 2)
+        return k.to_bytes(16, 'big')
 
     def execute(self):
         if self.role == LEADER_ROLE:
@@ -182,6 +186,17 @@ class BB84_Purified(QChatKeyProtocol):
             m = self._wait_for_control_message(message_type=BB84Message)
             r = m.data["r"]
         return self._extract_key(x_remain, r)
+
+
+class SuperDenseCoding(QChatMessageProtocol):
+    def _lead_protocol(self):
+        pass
+
+    def _follow_protocol(self):
+        pass
+
+    def execute(self, message):
+        pass
 
 
 class ProtocolFactory:
