@@ -85,9 +85,9 @@ class BB84_Purified(QChatKeyProtocol):
             else:
                 q = self.connection.cqc.createEPR(self.peer_info["user"])
 
-            bitflip = random.randint(0, 1)
-            if bitflip:
-                q.X()
+            # bitflip = random.randint(0, 1)
+            # if bitflip:
+            #     q.X()
             basisflip = random.randint(0, 1)
             if basisflip:
                 q.H()
@@ -164,15 +164,22 @@ class BB84_Purified(QChatKeyProtocol):
         return (num_error / num_test_bits)
 
     def chunk(self, data, chunk_size):
-        return [data[i:i+chunk_size] for i in range(0, len(data), chun_size)]
+        return [data[i:i+chunk_size] for i in range(0, len(data), chunk_size)]
 
     def _reconcile_information(self, x):
+        """
+        Information Reconciliation based on Hadamard Codes using H8
+        :param x: Set of codewords
+        :return: Bytestring of reconciled information
+        """
         m = 2
         n = 4 * m
         H = hadamard(n)
         e = np.mat([1, 1, 1, 1, 1, 1, 1, 1])
         reconciled = []
-        for codeword in self.chunk(x):
+        for codeword in self.chunk(x, 8):
+            if len(codeword) < 8:
+                return codeword, reconciled
             w_hat = np.mat(codeword)
             w = (2 * w_hat) - e
             s = w * H
@@ -186,14 +193,16 @@ class BB84_Purified(QChatKeyProtocol):
             elif max_value >= (n - 2):
                 v = H[max_index]
                 v_hat = (2 * e - v) % 3
-                reconciled += v_hat.to_list()[0]
+                print(v_hat)
+                reconciled += v_hat.tolist()[0]
 
             elif abs(min_value) >= (n - 2):
                 v = -H[min_index]
                 v_hat = (2 * e - v) % 3
-                reconciled += v_hat.to_list()[0]
+                print(v_hat)
+                reconciled += v_hat.tolist()[0]
 
-        return reconciled
+        return [], reconciled
 
     def _amplify_privacy(self, X):
         """
@@ -207,6 +216,7 @@ class BB84_Purified(QChatKeyProtocol):
             R = temp[0]
             T = temp[1] + X[1]
             self._send_control_message(message_data={"Y": Y, "T": T}, message_type=BB84Message)
+
         elif self.role == FOLLOW_ROLE:
             m = self._wait_for_control_message(message_type=BB84Message)
             Y = m.data["Y"]
@@ -218,9 +228,9 @@ class BB84_Purified(QChatKeyProtocol):
 
         return R.to_bytes(1, 'big')
 
-    def execute(self):
-        key_bits = []
-        while len(key_bits) < self.n:
+    def _execute(self):
+        key = b''
+        while len(key) < self.n:
             if self.role == LEADER_ROLE:
                 x, theta = self._distribute_bb84_states()
             else:
@@ -231,16 +241,45 @@ class BB84_Purified(QChatKeyProtocol):
             num_test_bits = self.n // 4
             error_rate = self._estimate_error_rate(x_remain, num_test_bits)
 
-            if error_rate > 1:
-                raise RuntimeError("Error rate of {}, aborting protocol")
+            if error_rate > 0.5:
+                raise RuntimeError("Error rate of {}, aborting protocol".format(error_rate))
 
             x_remain = x_remain[:-(len(x_remain) % 16)]
             reconciled = self._reconcile_information(x_remain)
 
-            key_bits += self._amplify_privacy(reconciled)
+            key += self._amplify_privacy(reconciled)
 
-        k = int(''.join([str(i) for i in key_bits]), 2)
-        return k.to_bytes(self.n // 8, 'big')
+        return key
+
+    def distill_tested_data(self):
+        if self.role == LEADER_ROLE:
+            x, theta = self._distribute_bb84_states()
+        else:
+            x, theta = self._receive_bb84_states()
+
+        x_remain = self._filter_theta(x=x, theta=theta)
+
+        num_test_bits = len(x_remain) // 2
+        error_rate = self._estimate_error_rate(x_remain, num_test_bits)
+
+        if error_rate >= 0.5:
+            raise RuntimeError("Error rate of {}, aborting protocol".format(error_rate))
+        return x_remain
+
+    def execute(self):
+        secret_bits = []
+        reconciled = []
+        key = b''
+        while len(key) < 16:
+            while len(reconciled) < 2:
+                while len(secret_bits) < 8:
+                    secret_bits += self.distill_tested_data()
+                print(secret_bits)
+                secret_bits, reconciled_bits = self._reconcile_information(secret_bits)
+                reconciled += reconciled_bits
+            print(reconciled)
+            key += self._amplify_privacy(reconciled)
+        return key
 
 
 class SuperDenseCoding(QChatMessageProtocol):

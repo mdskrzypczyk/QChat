@@ -28,8 +28,8 @@ class QChatConnection:
         self.stored_qubits = {}
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.classical_thread = DaemonThread(target=self.listen_for_classical)
-        self.qubit_thread = DaemonThread(target=self.listen_for_qubit)
-        self.epr_thread = DaemonThread(target=self.listen_for_epr)
+        # self.qubit_thread = DaemonThread(target=self.listen_for_qubit)
+        # self.epr_thread = DaemonThread(target=self.listen_for_epr)
 
     def __del__(self):
         if self.cqc:
@@ -48,13 +48,19 @@ class QChatConnection:
 
     def listen_for_qubit(self):
         while True:
-            q = self.cqc.recvEPR()
-            self.stored_qubits[q._qID] = q
+            try:
+                q = self.cqc.recvQubit()
+                self.stored_qubits[q._qID] = q
+            except:
+                pass
 
     def listen_for_epr(self):
         while True:
-            q = self.cqc.recvEPR()
-            self.stored_qubits[q._qID] = q
+            try:
+                q = self.cqc.recvEPR()
+                self.stored_qubits[q._qID] = q
+            except:
+                pass
 
     def listen_for_classical(self):
         self.listening_socket.bind((self.host, self.port))
