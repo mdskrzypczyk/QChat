@@ -23,9 +23,7 @@ class QChatServer:
         self.name=name
         self.logger = QChatLogger(__name__)
         self.config = self._load_server_config(self.name)
-        root_server_config = self._load_server_config("Root Server")
-        self.root_host = root_server_config["host"]
-        self.root_port = root_server_config["port"]
+        self.root_config = self._load_server_config(self.config.get("root"))
         self.connection = QChatConnection(name=name, config=self.config)
         self.control_message_queue = defaultdict(list)
         self.mailbox = QChatMailbox()
@@ -37,11 +35,13 @@ class QChatServer:
 
     def _register_with_root_server(self):
         try:
-            if self.config["host"] == self.root_host and self.config["port"] == self.root_port:
+            root_host = self.root_config["root"]
+            root_port = self.root_config["port"]
+            if self.config["host"] == root_host and self.config["port"] == root_port:
                 self.logger.debug("Am root server")
             else:
-                self.logger.debug("Sending registration to {}:{}".format(self.root_host, self.root_port))
-                self.sendRegistration(host=self.root_host, port=self.root_port)
+                self.logger.debug("Sending registration to {}:{}".format(root_host, root_port))
+                self.sendRegistration(host=root_host, port=root_port)
         except:
             self.logger.info("Failed to register with root server, is it running?")
 
@@ -175,17 +175,18 @@ class QChatServer:
         message = PUTUMessage(sender=self.name, message_data=self.getPublicInfo(user))
         self._send_message(connection["host"], connection["port"], message)
 
-    def requestUserInfo(self, user, root=True, host=None, port=None):
-        server_host = self.root_host if root else host
-        server_port = self.root_port if root else port
+    def requestUserInfo(self, user):
         request_message_data = {
             "user": user,
         }
         request_message_data.update(self.connection.get_connection_info())
         m = GETUMessage(sender=self.name, message_data=request_message_data)
-        self.connection.send_message(server_host, server_port, m.encode_message())
+        self.connection.send_message(self.root_config["host"], self.root_config["port"], m.encode_message())
+
+        wait_start = time.time()
         while not self.userDB.hasUser(user):
-            pass
+            if time.time() - wait_start > 2:
+                raise Exception("Failed to get {} info from registry".format(user))
 
     def getMailboxMessage(self, user):
         return self.mailbox.getMessage(user)

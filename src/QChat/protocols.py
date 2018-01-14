@@ -1,5 +1,7 @@
 import random
 import time
+import numpy as np
+from scipy.linalg import hadamard
 from QChat.messages import PTCLMessage, BB84Message
 
 
@@ -161,31 +163,84 @@ class BB84_Purified(QChatKeyProtocol):
 
         return (num_error / num_test_bits)
 
-    def _extract_key(self, x, r):
-        k = (sum([xj * rj for xj, rj in zip(x, r)]) % 2)
-        return k.to_bytes(16, 'big')
+    def chunk(self, data, chunk_size):
+        return [data[i:i+chunk_size] for i in range(0, len(data), chun_size)]
 
-    def execute(self):
+    def _reconcile_information(self, x):
+        m = 2
+        n = 4 * m
+        H = hadamard(n)
+        e = np.mat([1, 1, 1, 1, 1, 1, 1, 1])
+        reconciled = []
+        for codeword in self.chunk(x):
+            w_hat = np.mat(codeword)
+            w = (2 * w_hat) - e
+            s = w * H
+            max_index = s.argmax()
+            min_index = s.argmin()
+            max_value = s.item(max_index)
+            min_value = s.item(min_index)
+            if max_value == n:
+                reconciled += codeword
+
+            elif max_value >= (n - 2):
+                v = H[max_index]
+                v_hat = (2 * e - v) % 3
+                reconciled += v_hat.to_list()[0]
+
+            elif abs(min_value) >= (n - 2):
+                v = -H[min_index]
+                v_hat = (2 * e - v) % 3
+                reconciled += v_hat.to_list()[0]
+
+        return reconciled
+
+    def _amplify_privacy(self, X):
+        """
+        One-round privacy amplification sourced from https://eprint.iacr.org/2010/456.pdf
+        :param X: A bytestring of the information we wish to distill
+        :return: Privacy amplified byte from X
+        """
         if self.role == LEADER_ROLE:
-            x, theta = self._distribute_bb84_states()
-        else:
-            x, theta = self._receive_bb84_states()
-
-        x_remain = self._filter_theta(x=x, theta=theta)
-
-        num_test_bits = self.n // 4
-        error_rate = self._estimate_error_rate(x_remain, num_test_bits)
-
-        if error_rate > 1:
-            raise RuntimeError("Error rate of {}, aborting protocol")
-
-        if self.role == LEADER_ROLE:
-            r = [random.randint(0, 1) for _ in x_remain]
-            self._send_control_message(message_data={"r": r}, message_type=BB84Message)
+            Y = random.randint(0, 2 ** 8 - 1)
+            temp = (Y * X[0]).to_bytes(2, 'big')
+            R = temp[0]
+            T = temp[1] + X[1]
+            self._send_control_message(message_data={"Y": Y, "T": T}, message_type=BB84Message)
         elif self.role == FOLLOW_ROLE:
             m = self._wait_for_control_message(message_type=BB84Message)
-            r = m.data["r"]
-        return self._extract_key(x_remain, r)
+            Y = m.data["Y"]
+            T = m.data["T"]
+            temp = (Y * X[0]).to_bytes(2, 'big')
+            if T != X[1] + temp[1]:
+                raise Exception("Failed to amplify privacy")
+            R = temp[0]
+
+        return R.to_bytes(1, 'big')
+
+    def execute(self):
+        key_bits = []
+        while len(key_bits) < self.n:
+            if self.role == LEADER_ROLE:
+                x, theta = self._distribute_bb84_states()
+            else:
+                x, theta = self._receive_bb84_states()
+
+            x_remain = self._filter_theta(x=x, theta=theta)
+
+            num_test_bits = self.n // 4
+            error_rate = self._estimate_error_rate(x_remain, num_test_bits)
+
+            if error_rate > 1:
+                raise RuntimeError("Error rate of {}, aborting protocol")
+
+            x_remain = x_remain[:-(len(x_remain) % 16)]
+            reconciled = self._reconcile_information(x_remain)
+
+            key_bits += self._amplify_privacy(reconciled)
+
+        k = int(''.join([str(i) for i in key_bits]), 2)
+        return k.to_bytes(self.n // 8, 'big')
 
 
 class SuperDenseCoding(QChatMessageProtocol):

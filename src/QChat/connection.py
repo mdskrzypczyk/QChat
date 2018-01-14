@@ -1,7 +1,7 @@
 import socket
 import threading
 from QChat.log import QChatLogger
-from QChat.messages import HEADER_LENGTH, PAYLOAD_SIZE, MAX_SENDER_LENGTH, MessageFactory
+from QChat.messages import HEADER_LENGTH, PAYLOAD_SIZE, MAX_SENDER_LENGTH, MessageFactory, CQCCMessage
 from SimulaQron.cqc.pythonLib.cqc import *
 
 
@@ -25,8 +25,11 @@ class QChatConnection:
         self.host = config['host']
         self.port = config['port']
         self.message_queue = []
+        self.stored_qubits = {}
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.thread = DaemonThread(target=self.listen)
+        self.classical_thread = DaemonThread(target=self.listen_for_classical)
+        self.qubit_thread = DaemonThread(target=self.listen_for_qubit)
+        self.epr_thread = DaemonThread(target=self.listen_for_epr)
 
     def __del__(self):
         if self.cqc:
@@ -43,7 +46,17 @@ class QChatConnection:
         }
         return info
 
-    def listen(self):
+    def listen_for_qubit(self):
+        while True:
+            q = self.cqc.recvEPR()
+            self.stored_qubits[q._qID] = q
+
+    def listen_for_epr(self):
+        while True:
+            q = self.cqc.recvEPR()
+            self.stored_qubits[q._qID] = q
+
+    def listen_for_classical(self):
         self.listening_socket.bind((self.host, self.port))
         while True:
             self.logger.debug("Listening for incoming connection")
@@ -54,6 +67,14 @@ class QChatConnection:
             # Thread this
             t = threading.Thread(target=self._handle_connection, args=(conn, addr))
             t.start()
+
+    def _handle_cqcc(self, message):
+        qID = message.data["qID"]
+        dest_user = message.data["user"]
+        dest_host = message.data["connection"]["host"]
+        dest_port = message.data["connection"]["port"]
+        self.send
+
 
     def _handle_connection(self, conn, addr):
         header = conn.recv(HEADER_LENGTH)
@@ -85,7 +106,11 @@ class QChatConnection:
 
         self.logger.debug("Inserting message into queue")
         self.logger.debug("{} {} {}".format(header, sender, message_data))
-        self._append_message_to_queue(MessageFactory().create_message(header, sender, message_data))
+        m = MessageFactory().create_message(header, sender, message_data)
+        if isinstance(m, CQCCMessage):
+            self._handle_cqcc(m)
+        else:
+            self._append_message_to_queue(m)
         conn.close()
 
     def _append_message_to_queue(self, message):
@@ -107,5 +132,12 @@ class QChatConnection:
         self.logger.debug("Sent message to {}:{}".format(host, port))
         self.logger.debug("{}".format(message))
 
-    def send_qubit(self, user):
+    def relay_qubit(self):
         pass
+
+    def send_qubit(self, peer_info, q):
+        user = peer_info["user"]
+        host = peer_info["host"]
+        port = peer_info["port"]
+        self.cqc.sendQubit(q, user)
+

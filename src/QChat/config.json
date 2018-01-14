@@ -1,11 +1,13 @@
 {
   "Alice": {
+    "root": "Root Server"
     "host": "localhost",
     "port": 8000,
     "type": "client",
     "cqc_relay": "Eve"
   },
   "Bob": {
+    "root": "Root Server"
     "host": "localhost",
     "port": 8001,
     "type": "client",
