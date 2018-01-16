@@ -24,7 +24,6 @@ class QChatServer:
         self.logger = QChatLogger(__name__)
         self.config = self._load_server_config(self.name)
         self.root_config = self._load_server_config(self.config.get("root"))
-        print(self.config, self.root_config)
         self.connection = QChatConnection(name=name, config=self.config)
         self.control_message_queue = defaultdict(list)
         self.mailbox = QChatMailbox()
@@ -204,7 +203,7 @@ class QChatServer:
     def createQChatMessage(self, user, plaintext):
         user_key = self.userDB.getMessageKey(user)
         if not user_key:
-            self._establish_key(user, 20)
+            self._establish_key(user, 100)
             user_key=self.userDB.getMessageKey(user)
         nonce, ciphertext, tag = QChatCipher(user_key).encrypt(bytes(plaintext, 'utf-8'))
         message_data = {
