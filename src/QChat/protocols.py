@@ -15,6 +15,15 @@ class ProtocolException(Exception):
 
 class QChatProtocol:
     def __init__(self, peer_info, connection, n, ctrl_msg_q, outbound_q, role):
+        """
+        Initializes a protocol object that is used for executing quantum/classical exchange protocols
+        :param peer_info:  Dictionary containing host, ip, port information
+        :param connection: A QChatConnection object
+        :param n:          The number of qubits we will attempt to derive information from per round
+        :param ctrl_msg_q: Queue containing inbound messages from our peer
+        :param outbound_q: Queue containing outbound message to our peer
+        :param role:       Either LEADER_ROLE or FOLLOW_ROLE for coordinating the protocol
+        """
         self.logger = QChatLogger(__name__)
         self.connection = connection
         self.n = n
@@ -34,6 +43,12 @@ class QChatProtocol:
         raise NotImplementedError
 
     def _wait_for_control_message(self, idle_timeout=IDLE_TIMEOUT, message_type=None):
+        """
+        Waits for a control message from our peer in blocking mode
+        :param idle_timeout: The number of seconds to wait before aborting the protocol
+        :param message_type: The type of control message we are expecting
+        :return:             The message that we received
+        """
         wait_start = time.time()
         while not self.ctrl_msg_q:
             curr_time = time.time()
@@ -45,12 +60,22 @@ class QChatProtocol:
         return message
 
     def _send_control_message(self, message_data, message_type):
+        """
+        Sends a control message to our peer
+        :param message_data: The message data we want to send
+        :param message_type: The type of message we want to send
+        :return:
+        """
         message = message_type(sender=self.connection.name, message_data=message_data)
         self.outbound_q.put(message)
-        # self.connection.send_message(host=self.peer_info["host"], port=self.peer_info["port"],
-        #                              message=message.encode_message())
 
     def exchange_messages(self, message_data, message_type):
+        """
+        Exchanges messages with our peer
+        :param message_data: The message data we want to send
+        :param message_type: The message type we are expecting/wanting to send
+        :return:             The message we received from our peer
+        """
         if self.role == LEADER_ROLE:
             self._send_control_message(message_data=message_data, message_type=message_type)
             return self._wait_for_control_message(message_type=message_type)
@@ -63,10 +88,15 @@ class QChatProtocol:
 class QChatKeyProtocol(QChatProtocol):
     pass
 
+
 class QChatMessageProtocol(QChatProtocol):
     pass
 
+
 class BB84_Purified(QChatKeyProtocol):
+    """
+    Implements the Purified BB84 protocol
+    """
     name = "BB84_PURIFIED"
 
     def _lead_protocol(self):
@@ -80,6 +110,11 @@ class BB84_Purified(QChatKeyProtocol):
         self._send_control_message(message_data={"ACK": "ACK"}, message_type=BB84Message)
 
     def _distribute_bb84_states(self, eavesdropper=None):
+        """
+        With LEADER_ROLE this method is intended to distribute the EPR pairs used for the BB84 protocol
+        :param eavesdropper: The host of an eavesdropper if someone is eavesdropping on the quantum channel
+        :return:             A list of the measurements/basis used
+        """
         x = []
         theta = []
         while len(x) < self.n:
@@ -102,6 +137,10 @@ class BB84_Purified(QChatKeyProtocol):
         return x, theta
 
     def _receive_bb84_states(self):
+        """
+        With FOLLOW_ROLE this method is intended to receive the distributed qubits from the EPR pair
+        :return: A list of the measurement outcomes/basis used
+        """
         x = []
         theta = []
         while len(x) < self.n:
@@ -117,6 +156,12 @@ class BB84_Purified(QChatKeyProtocol):
         return x, theta
 
     def _filter_theta(self, x, theta):
+        """
+        Used to filter our measurements that were done with differing basis between the two peers in the protocol
+        :param x:       A list of the measurement outcomes
+        :param theta:   A list of the basis used for producing the measurement outcomes
+        :return:        The remaining measurement outcomes with matching basis with our peer
+        """
         x_remain = []
         response = self.exchange_messages(message_data={"theta": theta}, message_type=BB84Message)
         theta_hat = response.data["theta"]
@@ -217,29 +262,6 @@ class BB84_Purified(QChatKeyProtocol):
 
         return R.to_bytes(1, 'big')
 
-    def _execute(self):
-        key = b''
-        while len(key) < self.n:
-            if self.role == LEADER_ROLE:
-                x, theta = self._distribute_bb84_states()
-            else:
-                x, theta = self._receive_bb84_states()
-
-            x_remain = self._filter_theta(x=x, theta=theta)
-
-            num_test_bits = self.n // 4
-            error_rate = self._estimate_error_rate(x_remain, num_test_bits)
-
-            if error_rate > 0.5:
-                raise RuntimeError("Error rate of {}, aborting protocol".format(error_rate))
-
-            x_remain = x_remain[:-(len(x_remain) % 16)]
-            reconciled = self._reconcile_information(x_remain)
-
-            key += self._amplify_privacy(reconciled)
-
-        return key
-
     def distill_tested_data(self):
         if self.role == LEADER_ROLE:
             x, theta = self._distribute_bb84_states()
@@ -272,18 +294,6 @@ class BB84_Purified(QChatKeyProtocol):
                 key += b
         self.logger.debug("Derived key {}".format(key))
         return key
-
-
-class SuperDenseCoding(QChatMessageProtocol):
-    def _lead_protocol(self):
-        pass
-
-    def _follow_protocol(self):
-        pass
-
-    def execute(self, message):
-        pass
-
 
 class ProtocolFactory:
     def __init__(self):

@@ -3,6 +3,9 @@ from collections import defaultdict
 
 
 class QChatMailbox:
+    """
+    Implements a thread safe message storing mailbox
+    """
     def __init__(self):
         self.lock = threading.Lock()
         self.messages = defaultdict(list)

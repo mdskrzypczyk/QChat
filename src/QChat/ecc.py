@@ -28,10 +28,11 @@ def eVect(length, position):
 
 
 class ECC:
+    """
+    Base class that implements linear code encoding/decoding interface
+    """
     def __init__(self):
-        self.H = None
-        self.dict_H = {}
-        self.codeword_length = 0
+        raise Exception("ECC class does not implement detailed functionality, try ECC_Golay or ECC_Hamming")
 
     def chunk(self, x):
         return [x[i:i+self.codeword_length] for i in range(0, len(x), self.codeword_length)]
@@ -51,9 +52,14 @@ class ECC:
 
 class ECC_Golay(ECC):
     def __init__(self):
+        """
+        Initializes Golay error correcting code matrix for use with ECC
+        """
         self.codeword_length = 23
         self.H = H_Golay
         self.dict_H = {}
+
+        # Set the zero syndrome cases to the zero error string
         s = (0,)*11
         self.dict_H[s] = (0,)*23
         for i in range(1, 24):
@@ -74,6 +80,9 @@ class ECC_Golay(ECC):
 
 class ECC_Hamming(ECC):
     def __init__(self):
+        """
+        Initializes Hamming error correcting code matrix for use with ECC
+        """
         self.codeword_length = 7
         self.H = H_Hamming
         self.dict_H = {}

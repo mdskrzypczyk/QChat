@@ -5,6 +5,9 @@ from Crypto.Signature import DSS
 
 
 class QChatCipher:
+    """
+    Class that implements a simple Encryption/Decryption interface
+    """
     def __init__(self, key):
         self.key = key
 
@@ -23,6 +26,10 @@ class QChatCipher:
 
 
 class QChatSigner:
+    """
+    Class that implements a simple message signing interface that can
+    be retained
+    """
     def __init__(self, key=None):
         self.key = DSA.generate(1024) if not key else key
 
@@ -37,6 +44,9 @@ class QChatSigner:
 
 
 class QChatVerifier:
+    """
+    Class that implements a message verification interface
+    """
     def __init__(self, pubkey):
         self.pubkey = DSA.import_key(pubkey)
 

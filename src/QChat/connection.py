@@ -10,12 +10,22 @@ class ConnectionError(Exception):
 
 
 class DaemonThread(threading.Thread):
+    """
+    Thread class that defaults to running the thread with a daemon so that the thread can exit
+    properly
+    """
     def __init__(self, target):
         super().__init__(target=target, daemon=True)
         self.start()
 
+
 class QChatConnection:
-    def __init__(self, name, config, signer=None):
+    def __init__(self, name, config):
+        """
+        Initialize a connection to the CQC server and
+        :param name:   Name of the host (Must be one available by SimulaQron CQC)
+        :param config: Configuration for the connection
+        """
         self.lock = threading.Lock()
         self.logger = QChatLogger(__name__)
         self.cqc = None
@@ -28,8 +38,6 @@ class QChatConnection:
         self.stored_qubits = {}
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.classical_thread = DaemonThread(target=self.listen_for_classical)
-        # self.qubit_thread = DaemonThread(target=self.listen_for_qubit)
-        # self.epr_thread = DaemonThread(target=self.listen_for_epr)
 
     def __del__(self):
         if self.cqc:
@@ -46,43 +54,28 @@ class QChatConnection:
         }
         return info
 
-    def listen_for_qubit(self):
-        while True:
-            try:
-                q = self.cqc.recvQubit()
-                self.stored_qubits[q._qID] = q
-            except:
-                pass
-
-    def listen_for_epr(self):
-        while True:
-            try:
-                q = self.cqc.recvEPR()
-                self.stored_qubits[q._qID] = q
-            except:
-                pass
-
     def listen_for_classical(self):
+        """
+        A daemon for handling incoming connections.
+        :return: None
+        """
         self.listening_socket.bind((self.host, self.port))
         while True:
             self.logger.debug("Listening for incoming connection")
             self.listening_socket.listen(1)
             conn, addr = self.listening_socket.accept()
             self.logger.debug("Got connection from {}".format(addr))
-
-            # Thread this
             t = threading.Thread(target=self._handle_connection, args=(conn, addr))
             t.start()
 
-    def _handle_cqcc(self, message):
-        qID = message.data["qID"]
-        dest_user = message.data["user"]
-        dest_host = message.data["connection"]["host"]
-        dest_port = message.data["connection"]["port"]
-        self.send
-
-
     def _handle_connection(self, conn, addr):
+        """
+        Receives incoming QChat Messages and verifies their structure before storing them
+        so that they can be retrieved.
+        :param conn: Connection information from sockets
+        :param addr: Address information from sockets
+        :return: None
+        """
         header = conn.recv(HEADER_LENGTH)
         if header not in MessageFactory().message_mapping.keys():
             raise ConnectionError("Incorrect message header")
@@ -113,10 +106,7 @@ class QChatConnection:
         self.logger.debug("Inserting message into queue")
         self.logger.debug("{} {} {}".format(header, sender, message_data))
         m = MessageFactory().create_message(header, sender, message_data)
-        if isinstance(m, CQCCMessage):
-            self._handle_cqcc(m)
-        else:
-            self._append_message_to_queue(m)
+        self._append_message_to_queue(m)
         conn.close()
 
     def _append_message_to_queue(self, message):
@@ -128,20 +118,23 @@ class QChatConnection:
             return self.message_queue.pop(0)
 
     def recv_message(self):
+        """
+        Method that returns the oldest message in the queue
+        :return: None
+        """
         return self._pop_message_from_queue() if self.message_queue else None
 
     def send_message(self, host, port, message):
+        """
+        Connects and sends a message to the specified host:port
+        :param host: Hostname to send to
+        :param port: Port to send to
+        :param message: Bytes object message
+        :return: None
+        """
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((host, port))
         s.sendall(message)
         s.close()
         self.logger.debug("Sent message to {}:{}".format(host, port))
         self.logger.debug("{}".format(message))
-
-    def relay_qubit(self):
-        pass
-
-    def send_qubit(self, peer_info, q):
-        user = peer_info["user"]
-        self.cqc.sendQubit(q, user)
-
