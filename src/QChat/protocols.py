@@ -14,11 +14,12 @@ class ProtocolException(Exception):
 
 
 class QChatProtocol:
-    def __init__(self, peer_info, connection, n, ctrl_msg_q, role):
+    def __init__(self, peer_info, connection, n, ctrl_msg_q, outbound_q, role):
         self.logger = QChatLogger(__name__)
         self.connection = connection
         self.n = n
         self.ctrl_msg_q = ctrl_msg_q
+        self.outbound_q = outbound_q
         self.peer_info = peer_info
         self.role = role
         if role == LEADER_ROLE:
@@ -45,8 +46,9 @@ class QChatProtocol:
 
     def _send_control_message(self, message_data, message_type):
         message = message_type(sender=self.connection.name, message_data=message_data)
-        self.connection.send_message(host=self.peer_info["host"], port=self.peer_info["port"],
-                                     message=message.encode_message())
+        self.outbound_q.put(message)
+        # self.connection.send_message(host=self.peer_info["host"], port=self.peer_info["port"],
+        #                              message=message.encode_message())
 
     def exchange_messages(self, message_data, message_type):
         if self.role == LEADER_ROLE:
@@ -261,10 +263,8 @@ class BB84_Purified(QChatKeyProtocol):
             while len(reconciled) < 16:
                 while len(secret_bits) < 23:
                     secret_bits += self.distill_tested_data()
-                self.logger.debug("Secret Bits: {}".format(secret_bits))
                 secret_bits, reconciled_bits = self._reconcile_information(secret_bits)
                 reconciled += reconciled_bits
-            self.logger.debug("Reconciled bits: {}".format(reconciled))
             reconciled_bytes = int(''.join([str(i) for i in reconciled[:16]]), 2).to_bytes(2, 'big')
             reconciled = reconciled[16:]
             b = self._amplify_privacy(reconciled_bytes)

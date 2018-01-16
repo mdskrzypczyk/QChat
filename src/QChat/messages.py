@@ -1,4 +1,5 @@
 import json
+import threading
 
 HEADER_LENGTH = 4
 PAYLOAD_SIZE = 4
@@ -28,7 +29,6 @@ class Message:
                 raise MalformedMessage
         except:
             raise MalformedMessage
-
 
     def encode_message(self):
         padded_sender = (b'\x00'*MAX_SENDER_LENGTH + bytes(self.sender, 'utf-8'))[-16:]

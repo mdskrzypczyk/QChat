@@ -15,7 +15,7 @@ class DaemonThread(threading.Thread):
         self.start()
 
 class QChatConnection:
-    def __init__(self, name, config):
+    def __init__(self, name, config, signer=None):
         self.lock = threading.Lock()
         self.logger = QChatLogger(__name__)
         self.cqc = None
@@ -143,7 +143,5 @@ class QChatConnection:
 
     def send_qubit(self, peer_info, q):
         user = peer_info["user"]
-        host = peer_info["host"]
-        port = peer_info["port"]
         self.cqc.sendQubit(q, user)
 
