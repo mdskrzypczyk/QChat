@@ -107,6 +107,10 @@ class PTCLMessage(Message):
     header = b'PTCL'
 
 
+class RQQBMessage(Message):
+    header = b'RQQB'
+
+
 class MessageFactory:
     def __init__(self):
         """
@@ -121,7 +125,8 @@ class MessageFactory:
             GETUMessage.header: GETUMessage,
             QCHTMessage.header: QCHTMessage,
             BB84Message.header: BB84Message,
-            PTCLMessage.header: PTCLMessage
+            PTCLMessage.header: PTCLMessage,
+            RQQBMessage.header: RQQBMessage
         }
 
     def create_message(self, header, sender, message_data):

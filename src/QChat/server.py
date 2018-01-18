@@ -9,7 +9,7 @@ from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from QChat.db import UserDB
 from QChat.log import QChatLogger
 from QChat.mailbox import QChatMailbox
-from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage
+from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
 from QChat.protocols import ProtocolFactory, QChatKeyProtocol, BB84_Purified, LEADER_ROLE, FOLLOW_ROLE
 
 
@@ -106,11 +106,18 @@ class QChatServer:
                 message = self._verify_and_strip_message(message)
             self._follow_protocol(message)
 
+        elif message.header == RQQBMessage.header:
+            self._distribute_qubits(userA=message.sender, userB=message.data["user"])
+
         else:
             message = self._verify_and_strip_message(message)
             self.control_message_queue[message.sender].append(message)
 
         self.logger.debug("Completed processing message")
+
+    def _distribute_qubits(self, userA, userB):
+        q = self.connection.cqc.createEPR(userA)
+        self.connection.cqc.sendQubit(q, userB)
 
     def _follow_protocol(self, message):
         peer_info = {
@@ -121,7 +128,7 @@ class QChatServer:
 
         protocol_class = ProtocolFactory().createProtocol(name=message.data['name'])
         p = protocol_class(peer_info, self.connection, message.data['n'], self.control_message_queue[message.sender],
-                           self.outbound_queue[message.sender], FOLLOW_ROLE)
+                           self.outbound_queue[message.sender], FOLLOW_ROLE, self.root_config)
 
         if isinstance(p, QChatKeyProtocol):
             self.logger.debug("Establishing key with {}".format(message.sender))
@@ -162,7 +169,7 @@ class QChatServer:
             peer_info.update(self.getConnectionInfo(user))
             p = protocol_class(peer_info=peer_info, connection=self.connection, n=key_size,
                                ctrl_msg_q=self.control_message_queue[user], outbound_q=self.outbound_queue[user],
-                               role=LEADER_ROLE)
+                               role=LEADER_ROLE, relay_info=self.root_config)
 
         self.userDB.changeUserInfo(user, message_key=p.execute())
 

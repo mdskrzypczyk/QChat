@@ -1,12 +1,14 @@
 import random
 import time
+from QChat.device import LeadDevice, FollowDevice
 from QChat.ecc import ECC_Golay
 from QChat.log import QChatLogger
 from QChat.messages import PTCLMessage, BB84Message
 
 LEADER_ROLE = 0
 FOLLOW_ROLE = 1
-IDLE_TIMEOUT = 2
+IDLE_TIMEOUT = 5
+PCHSH = 0.8535533905932737
 
 
 class ProtocolException(Exception):
@@ -14,7 +16,7 @@ class ProtocolException(Exception):
 
 
 class QChatProtocol:
-    def __init__(self, peer_info, connection, n, ctrl_msg_q, outbound_q, role):
+    def __init__(self, peer_info, connection, n, ctrl_msg_q, outbound_q, role, relay_info):
         """
         Initializes a protocol object that is used for executing quantum/classical exchange protocols
         :param peer_info:  Dictionary containing host, ip, port information
@@ -31,6 +33,7 @@ class QChatProtocol:
         self.outbound_q = outbound_q
         self.peer_info = peer_info
         self.role = role
+        self.relay_info = relay_info
         if role == LEADER_ROLE:
             self._lead_protocol()
         elif role == FOLLOW_ROLE:
@@ -207,6 +210,79 @@ class BB84_Purified(QChatKeyProtocol):
                 num_error += 1
 
         return (num_error / num_test_bits)
+
+    def _device_independent_distribute_bb84(self):
+        x = []
+        theta = [random.randint(0, 1) for _ in range(self.n)]
+        device = LeadDevice(self.connection, self.relay_info)
+        for b in theta:
+            device.requestEPR(self.peer_info["user"])
+            q = device.receiveEPR()
+            x.append(device.measure(q, b))
+            m = self.exchange_messages(message_data={"ack": True}, message_type=BB84Message)
+            if not m.data["ack"]:
+                raise ProtocolException("Error distributing DI states")
+
+        return x, theta
+
+    def _device_independent_receive_bb84(self):
+        x = []
+        theta = [random.randint(0, 2) for _ in range(self.n)]
+        device = FollowDevice(self.connection, self.relay_info)
+        for b in theta:
+            q = device.receiveEPR()
+            x.append(device.measure(q, b))
+            m = self.exchange_messages(message_data={"ack": True}, message_type=BB84Message)
+            if not m.data["ack"]:
+                raise ProtocolException("Error receiving DI states")
+
+        return x, theta
+
+    def _device_independent_epr_test(self, x, theta):
+        m = self.exchange_messages(message_data={"theta": theta}, message_type=BB84Message)
+        theta_hat = m.data["theta"]
+        if self.role == LEADER_ROLE:
+            T = random.sample(range(len(x)), self.n // 2)
+            self._send_control_message(message_data={"T": T}, message_type=BB84Message)
+            Tp = [j for j in T if theta_hat[j] in [0, 1]]
+            Tpp = [j for j in T if theta[j] == 0 and theta_hat[j] == 2]
+            R = [j for j in set(range(len(x))) - set(T) if theta[j] == 0 and theta_hat[j] == 2]
+
+        elif self.role == FOLLOW_ROLE:
+            m = self._wait_for_control_message(message_type=BB84Message)
+            T = m.data["T"]
+            Tp = [j for j in T if theta[j] in [0, 1]]
+            Tpp = [j for j in T if theta_hat[j] == 0 and theta[j] == 2]
+            R = [j for j in set(range(len(x))) - set(T) if theta_hat[j] == 0 and theta[j] == 2]
+
+        x_T = [x[j] for j in T]
+        m = self.exchange_messages(message_data={"x_T": x_T}, message_type=BB84Message)
+        x_T_hat = m.data["x_T"]
+
+        winning = [j for j, x1, x2 in zip(Tp, x_T, x_T_hat) if x1 ^ x2 == theta[j] & theta_hat[j]]
+        p_win = len(winning) / len(Tp)
+        matching = [j for j, x1, x2 in zip(Tpp, x_T, x_T_hat) if x1 == x2]
+        p_match = len(matching) / len(Tpp)
+
+        e = 0.1
+        if p_win < PCHSH - e or p_match < 1 - e:
+            self.logger.debug(x_T)
+            self.logger.debug(x_T_hat)
+            self.logger.debug("CHSH Winners: {} out of {}".format(len(winning), Tp))
+            self.logger.debug("Matching: {} out of {}".format(len(matching), Tpp))
+            raise ProtocolException("Failed to pass CHSH test: p_win: {} p_match: {}".format(p_win, p_match))
+
+        x_remain = [x[r] for r in R]
+        return x_remain
+
+    def distill_device_independent_data(self):
+        if self.role == LEADER_ROLE:
+            x, theta = self._device_independent_distribute_bb84()
+        elif self.role == FOLLOW_ROLE:
+            x, theta = self._device_independent_receive_bb84()
+
+        x_remain = self._device_independent_epr_test(x, theta)
+        return x_remain
 
     def _reconcile_information(self, x, ecc=ECC_Golay()):
         """

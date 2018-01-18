@@ -2,7 +2,7 @@ import logging
 import sys
 
 LOG_LEVEL = logging.DEBUG
-FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+FORMAT = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 logging.basicConfig(format=FORMAT, level=LOG_LEVEL)
 
 
