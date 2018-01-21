@@ -11,6 +11,8 @@ class MalformedMessage(Exception):
 
 class Message:
     header = b'MSSG'
+    verify = False
+    strip = False
     def __init__(self, sender, message_data):
         """
         Initializes application specific message structure for use with QChat
@@ -73,6 +75,8 @@ class QCHTMessage(Message):
     QChat message used for the primary chat's client interface
     """
     header = b'QCHT'
+    verify = True
+    strip = True
 
 
 class GETUMessage(Message):
@@ -81,6 +85,7 @@ class GETUMessage(Message):
     known hosts in the application network
     """
     header = b'GETU'
+    strip = True
 
 
 class PUTUMessage(Message):
@@ -89,6 +94,7 @@ class PUTUMessage(Message):
     other known hosts in the application network
     """
     header = b'PUTU'
+    strip = True
 
 
 class BB84Message(Message):
@@ -105,10 +111,16 @@ class PTCLMessage(Message):
     follower's role in the requested protocol
     """
     header = b'PTCL'
+    verify = True
+    strip = True
 
 
 class RQQBMessage(Message):
     header = b'RQQB'
+
+
+class SPDSMessage(Message):
+    header = b'SPDS'
 
 
 class MessageFactory:
@@ -126,7 +138,8 @@ class MessageFactory:
             QCHTMessage.header: QCHTMessage,
             BB84Message.header: BB84Message,
             PTCLMessage.header: PTCLMessage,
-            RQQBMessage.header: RQQBMessage
+            RQQBMessage.header: RQQBMessage,
+            SPDSMessage.header: SPDSMessage
         }
 
     def create_message(self, header, sender, message_data):

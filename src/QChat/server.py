@@ -2,7 +2,9 @@ import threading
 import time
 import json
 import os
+import random
 from collections import defaultdict
+from functools import partial
 from queue import Queue
 from QChat.connection import QChatConnection
 from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
@@ -10,10 +12,14 @@ from QChat.db import UserDB
 from QChat.log import QChatLogger
 from QChat.mailbox import QChatMailbox
 from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
-from QChat.protocols import ProtocolFactory, QChatKeyProtocol, BB84_Purified, LEADER_ROLE, FOLLOW_ROLE
+from QChat.protocols import ProtocolFactory, QChatKeyProtocol, BB84_Purified, SuperDenseCoding, \
+                            LEADER_ROLE, FOLLOW_ROLE
 
 
 class DaemonThread(threading.Thread):
+    """
+    Helper class that starts a thread in Daemon mode so that it can close properly when the server closes
+    """
     def __init__(self, target):
         super().__init__(target=target, daemon=True)
         self.start()
@@ -21,25 +27,76 @@ class DaemonThread(threading.Thread):
 
 class QChatServer:
     def __init__(self, name):
+        """
+        Initializes a QChat Server that serves as the primary communication interface with other applications
+        :param name: Name of the host we want to be on the network
+        """
         self.name=name
         self.logger = QChatLogger(__name__)
+
+        # This is the server's personal config
         self.config = self._load_server_config(self.name)
+
+        # This is information for the root registry server
         self.root_config = self._load_server_config(self.config.get("root"))
+
+        # Connection to other applications
         self.connection = QChatConnection(name=name, config=self.config)
+
+        # Inbound control messages for protocols
         self.control_message_queue = defaultdict(list)
-        self.outbound_queue = defaultdict(Queue)
+
+        # Outbound message queue
+        self.outbound_queue = Queue()
+
+        # Storage for encrypted chat messages
         self.mailbox = QChatMailbox()
+
+        # RSA Signer for handling unauthenticated classical channels
         self.signer = QChatSigner()
+
+        # Storage of user/network information
         self.userDB = UserDB()
+
+        # Load ourselves into our DB
         self.userDB.addUser(user=self.name, pub=self.signer.get_pub(), **self.connection.get_connection_info())
+
+        # Storage of distributed qubit information
+        self.qubit_history = defaultdict(list)
+
+        # Start our inbound/outbound message handlers
         self.message_processor = DaemonThread(target=self.read_from_connection)
         self.message_sender = DaemonThread(target=self.send_outbound_messages)
+
+        # Register with the root registry
         self._register_with_root_server()
 
+    def _load_server_config(self, name):
+        """
+        Obtains the hosts server configuration from the config file
+        :param name:
+        :return:
+        """
+        path = os.path.abspath(__file__)
+        config_path = os.path.dirname(path) + "/config.json"
+        self.logger.debug("Loading server config {}".format(config_path))
+
+        with open(config_path) as f:
+            base_config = json.load(f)
+            self.logger.debug("Config: {}".format(base_config))
+
+        return base_config.get(name)
+
     def _register_with_root_server(self):
+        """
+        Registers our application server with the root registry server
+        :return: None
+        """
         try:
             root_host = self.root_config["host"]
             root_port = self.root_config["port"]
+
+            # No need to register with ourselves if we are the root registry
             if self.config["host"] == root_host and self.config["port"] == root_port:
                 self.logger.debug("Am root server")
             else:
@@ -48,199 +105,366 @@ class QChatServer:
         except:
             self.logger.info("Failed to register with root server, is it running?")
 
-    def _load_server_config(self, name):
-        path = os.path.abspath(__file__)
-        config_path = os.path.dirname(path) + "/config.json"
-        self.logger.debug("Loading server config {}".format(config_path))
-        with open(config_path) as f:
-            base_config = json.load(f)
-            self.logger.debug("Config: {}".format(base_config))
-        return base_config.get(name)
+    def send_outbound_messages(self):
+        """
+        Method for daemon thread, empties the outbound queue
+        :return: None
+        """
+        while True:
+            if not self.outbound_queue.empty():
+                user, message = self.outbound_queue.get()
+                self.sendMessage(user, message)
 
     def read_from_connection(self):
-        self.logger.debug("Processing incoming messages")
+        """
+        Processes inbound messages from the application connection
+        :return: None
+        """
         while True:
             message = self.connection.recv_message()
             if message:
                 self.start_process_thread(message)
 
-    def send_outbound_messages(self):
-        while True:
-            outbound_users = list(self.outbound_queue.keys())
-            for user in outbound_users:
-                q = self.outbound_queue[user]
-                if not q.empty():
-                    message = q.get()
-                    self.sendMessage(user, message)
-
-
     def start_process_thread(self, message):
+        """
+        Forks off a thread for handling messages so that they can be processed in parallel
+        :param message: The message we obtained from the application connection
+        :return: None
+        """
         t = threading.Thread(target=self.process_message, args=(message,))
         t.start()
 
     def process_message(self, message):
-        self.logger.debug("Processing {} message from {}: {}".format(message.header, message.sender, message.data))
-        if message.header == QCHTMessage.header:
-            message = self._verify_and_strip_message(message)
-            self.mailbox.storeMessage(message)
-            self.logger.info("New QChat message from {}".format(message.sender))
+        """
+        The primary message handling entrypoint, performs signature verification/stripping before passing the
+        message to a specific handler
+        :param message: The inbound message from the application connection
+        :return: None
+        """
+        self.logger.debug("Processing {} message from {}: {}".format(message.header,
+                                                                     message.sender,
+                                                                     message.data))
 
-        elif message.header == RGSTMessage.header:
-            self.registerUser(**message.data)
-            self.logger.info("Registered new contact {}".format(message.sender))
+        # Verify the signature on the message for key message types
+        if message.verify:
+            message, signature = self._strip_signature(message)
+            self._verify_message(message, signature)
 
-        elif message.header == GETUMessage.header:
-            message = self._strip_signature(message)
-            self.sendUserInfo(**message.data)
-            self.logger.debug("Sent {} user info to {}".format(message.data["user"], message.sender))
+        # Strip unnecessary signature information should it not be necessary for the message type
+        elif message.strip:
+            message, _ = self._strip_signature(message)
 
-        elif message.header == PUTUMessage.header:
-            message = self._strip_signature(message)
-            self.addUserInfo(**message.data)
-            self.logger.info("Got {} user info".format(message.data["user"]))
+        # Mapping of message headers to their appropriate handlers
+        proc_map = {
+            QCHTMessage.header: self.mailbox.storeMessage,
+            RGSTMessage.header: partial(self._pass_message_data, handler=self.registerUser),
+            GETUMessage.header: partial(self._pass_message_data, handler=self.sendUserInfo),
+            PUTUMessage.header: partial(self._pass_message_data, handler=self.addUserInfo),
+            PTCLMessage.header: self._follow_protocol,
+            RQQBMessage.header: self._distribute_qubits
+        }
 
-        elif message.header == PTCLMessage.header:
-            if not self.userDB.hasUser(message.sender):
-                self.requestUserInfo(message.sender)
-            else:
-                message = self._verify_and_strip_message(message)
-            self._follow_protocol(message)
-
-        elif message.header == RQQBMessage.header:
-            self._distribute_qubits(userA=message.sender, userB=message.data["user"])
-
-        else:
-            message = self._verify_and_strip_message(message)
-            self.control_message_queue[message.sender].append(message)
-
+        handler = proc_map.get(message.header, self._store_control_message)
+        handler(message)
         self.logger.debug("Completed processing message")
 
-    def _distribute_qubits(self, userA, userB):
-        q = self.connection.cqc.createEPR(userA)
-        self.connection.cqc.sendQubit(q, userB)
-
-    def _follow_protocol(self, message):
-        peer_info = {
-            "user": message.sender,
-        }
-        peer_info.update(self.getConnectionInfo(message.sender))
-        self.logger.debug("Following protocol with peer info: {}".format(peer_info))
-
-        protocol_class = ProtocolFactory().createProtocol(name=message.data['name'])
-        p = protocol_class(peer_info, self.connection, message.data['n'], self.control_message_queue[message.sender],
-                           self.outbound_queue[message.sender], FOLLOW_ROLE, self.root_config)
-
-        if isinstance(p, QChatKeyProtocol):
-            self.logger.debug("Establishing key with {}".format(message.sender))
-            self.userDB.changeUserInfo(message.sender, message_key=p.execute())
-
-    def _get_registration_data(self):
-        reg_data = {
-            "user": self.name,
-            "pub": self.getPublicKey().decode("ISO-8859-1")
-        }
-        reg_data.update(self.connection.get_connection_info())
-        self.logger.debug("Constructing registration data: {}".format(reg_data))
-        return reg_data
-
     def _sign_message(self, message):
+        """
+        Internal method for signing outbound messages to assure authentication
+        :param message:
+        :return:
+        """
         sig = self.signer.sign(message.encode_message())
         message.data["sig"] = sig.decode("ISO-8859-1")
         return message
 
     def _strip_signature(self, message):
-        message.data.pop("sig")
-        return message
+        """
+        Internal method for stripping signature data from a message that is unecessary to message handlers
+        :param message: The message we want to strip
+        :return: A tuple of the message, signature
+        """
+        signature = message.data.pop("sig").encode("ISO-8859-1")
+        return message, signature
 
-    def _verify_and_strip_message(self, message):
-        sig = message.data["sig"].encode("ISO-8859-1")
-        message = self._strip_signature(message)
+    def _verify_message(self, message, signature):
+        """
+        Internal method for verifying the signature provided with a message
+        :param message:   The message we want to verify
+        :param signature: The signature we want to verify
+        :return: None
+        """
         data = message.encode_message()
-        if not QChatVerifier(self.userDB.getPublicKey(message.sender)).verify(data, sig):
+
+        # Use the stored public key for verification
+        pub = self.userDB.getPublicKey(message.sender)
+
+        if not QChatVerifier(pub).verify(data, signature):
             raise Exception("Obtained message with incorrect signature")
+
         self.logger.debug("Successfully verified signature")
-        return message
+
+    def _pass_message_data(self, message, handler):
+        """
+        Internal method for passing the message data as arguments to the message handlers
+        :param message: The message to unpack arguments from
+        :param handler: The handler that will process the message
+        :return: None
+        """
+        handler(**message.data)
+
+    def _follow_protocol(self, message):
+        """
+        Internal method for handling a PTCL Message, upon receipt of a PTCL Message the server assumes the
+        follower role in the protocol
+        :param message: The PTCL Message containing protocol initialization information
+        :return: None
+        """
+        # Construct peer information for the protocol
+        peer_info = {
+            "user": message.sender,
+        }
+        peer_info.update(self.getConnectionInfo(message.sender))
+
+        # Construct the protocol object
+        protocol_class = ProtocolFactory().createProtocol(name=message.data['name'])
+        p = protocol_class(peer_info, self.connection, message.data['key_size'], self.control_message_queue[message.sender],
+                           self.outbound_queue, FOLLOW_ROLE, self.root_config)
+
+        self.logger.debug("Following {} protocol with user {}".format(p.name, message.sender))
+
+        # Establish a key with our peer
+        if isinstance(p, QChatKeyProtocol):
+            key = p.execute()
+            self.userDB.changeUserInfo(message.sender, message_key=key)
+
+        # Exchange a message with our peer
+        elif isinstance(p, SuperDenseCoding):
+            self.logger.debug("Received SuperDense coded message from {}: {}".format(message.sender,
+                                                                                     p.receive_message()))
+
+    def _distribute_qubits(self, message):
+        """
+        Internal method that allows the server to act as an EPR source.  For use in modeling the Purified BB84
+        protocol
+        :param message: Message containing user information for EPR distribution
+        :return: None
+        """
+        # First send half to the message sender and store the second
+        q = self.connection.cqc.createEPR(message.sender)
+
+        # Optionally attack the distribution, comparison should be change to control influence
+        peer = message.data["user"]
+
+        p = random.random()
+        if p < 0:
+            # Store our measurement and send a new qubit to the peer
+            outcome = q.measure()
+            self.qubit_history[peer].append(outcome)
+            q = qubit(self.connection.cqc)
+
+        # Send other half to peer
+        self.connection.cqc.sendQubit(q, peer)
+
+    def _store_control_message(self, message):
+        """
+        Internal method for handling messages that do not have specific handlers
+        :param message: The message to store
+        :return: None
+        """
+        self.control_message_queue[message.sender].append(message)
+
+    def _get_registration_data(self):
+        """
+        Internal method for constructing this server's registration data
+        :return: The constructed registration data
+        """
+        reg_data = {
+            "user": self.name,
+            "pub": self.getPublicKey().decode("ISO-8859-1")
+        }
+        reg_data.update(self.connection.get_connection_info())
+
+        self.logger.debug("Constructing registration data: {}".format(reg_data))
+
+        return reg_data
 
     def _establish_key(self, user, key_size, protocol_class=BB84_Purified):
+        """
+        Internal method for leading a key establishment protocol
+        :param user: The user we want to establish the shared key with
+        :param key_size: The size of the key (in bytes) that we want to construct
+        :param protocol_class: The protocol we want to use to establish the key
+        :return: None
+        """
+        # Check that we have the user in out system
         if self.hasUser(user):
+            # Construct peer info for the protocol
             peer_info = {
                 "user": user,
             }
             peer_info.update(self.getConnectionInfo(user))
-            p = protocol_class(peer_info=peer_info, connection=self.connection, n=key_size,
-                               ctrl_msg_q=self.control_message_queue[user], outbound_q=self.outbound_queue[user],
+
+            # Construct the protocol object
+            p = protocol_class(peer_info=peer_info, connection=self.connection, key_size=key_size,
+                               ctrl_msg_q=self.control_message_queue[user], outbound_q=self.outbound_queue,
                                role=LEADER_ROLE, relay_info=self.root_config)
 
-        self.userDB.changeUserInfo(user, message_key=p.execute())
+            # Execute the protocol and store the derived key in the user database
+            self.userDB.changeUserInfo(user, message_key=p.execute())
+
+        else:
+            raise Exception("No known user {}".format(user))
 
     def hasUser(self, user):
+        """
+        Interface to the user database for checking if a user exists
+        :param user:
+        :return:
+        """
         return self.userDB.hasUser(user)
 
     def addUserInfo(self, user, **kwargs):
+        """
+        Adds arbitrary information to the user database for a user
+        :param user: The user we want to add to the database
+        :param kwargs: The key=value pairs we want to store in the database
+        :return: None
+        """
         self.logger.debug("Adding to user {} info {}".format(user, kwargs))
         self.userDB.addUser(user, **kwargs)
 
     def registerUser(self, user, connection, pub):
+        """
+        Registers a new user to our server
+        :param user: The user being registered
+        :param connection: Connection (host/port) information of the user
+        :param pub: The RSA public key of the user for authentication
+        :return: None
+        """
         if self.userDB.hasUser(user):
             raise Exception("User {} already registered".format(user))
         else:
             self.addUserInfo(user, pub=pub.encode("ISO-8859-1"), connection=connection)
-
-    def getPublicKey(self):
-        return self.userDB.getPublicKey(user=self.name)
+            self.logger.info("Registered new contact {}".format(user))
 
     def getPublicInfo(self, user):
+        """
+        Returns the relevant public information for the application that is necessary for establishing
+        RSA authenticated classical communication
+        :param user: The user we want the public information for
+        :return: A dictionary containing the user's name, host/port info, and public key
+        """
         pub_info = dict(self.userDB.getPublicUserInfo(user))
         pub_info["pub"] = pub_info["pub"].decode("ISO-8859-1")
         pub_info["user"] = user
         return pub_info
 
+    def getPublicKey(self):
+        """
+        Returns the server's public key
+        :return:
+        """
+        return self.userDB.getPublicKey(user=self.name)
+
+    def getConnectionInfo(self, user):
+        """
+        Returns the connection information for the specified user
+        :param user: User we want connection information for
+        :return: A dictionary containing the host/port information of the user
+        """
+        return self.userDB.getConnectionInfo(user)
+
     def sendRegistration(self, host, port):
+        """
+        Sends this server's registration to the specified host/port
+        :param host: Host of the registry
+        :param port: Port of the registry
+        :return: None
+        """
         message = RGSTMessage(sender=self.name, message_data=self._get_registration_data())
         self.connection.send_message(host, port, message.encode_message())
 
-    def getConnectionInfo(self, user):
-        return self.userDB.getConnectionInfo(user)
-
-    def sendUserInfo(self, user, connection):
-        self.logger.debug("Sending {} info to {}".format(user, connection))
-        message = PUTUMessage(sender=self.name, message_data=self.getPublicInfo(user))
-        message = self._sign_message(message)
-        self.connection.send_message(host=connection["host"], port=connection["port"], message=message.encode_message())
-
     def requestUserInfo(self, user):
+        """
+        Requests the specified user's information from the root registry in the network
+        :param user: User we want to obtain information for
+        :return: None
+        """
+        # Construct the request message
         request_message_data = {
             "user": user,
         }
         request_message_data.update(self.connection.get_connection_info())
+
+        # Create the messag eobject and sign it
         m = GETUMessage(sender=self.name, message_data=request_message_data)
         m = self._sign_message(m)
+
+        # Send the request to the root registry
         self.connection.send_message(self.root_config["host"], self.root_config["port"], m.encode_message())
 
+        # Wait for a response from the root registry
         wait_start = time.time()
         while not self.userDB.hasUser(user):
             if time.time() - wait_start > 2:
                 raise Exception("Failed to get {} info from registry".format(user))
 
-    def getMailboxMessage(self, user):
-        return self.mailbox.getMessage(user)
+        # Send a registration message to the user we want information for
+        connection = self.getConnectionInfo(user)
+        self.sendRegistration(host=connection["host"], port=connection["port"])
+
+    def sendUserInfo(self, user, connection):
+        """
+        Sends the specified user's information to the server specified by connection
+        :param user: The user we want to provide information for
+        :param connection: The host/port information of the receiving server
+        :return: None
+        """
+        self.logger.debug("Sending {} info to {}".format(user, connection))
+
+        # Construct and sign the message containing the requested information
+        message = PUTUMessage(sender=self.name, message_data=self.getPublicInfo(user))
+        message = self._sign_message(message)
+        self.connection.send_message(host=connection["host"], port=connection["port"], message=message.encode_message())
 
     def sendMessage(self, user, message):
+        """
+        Interface for sending a preconstructed message object to a user
+        :param user: The user to send the message to
+        :param message: The Message object we want to send
+        :return: None
+        """
+        # Ensure we know how to contact the user, if not resolve the information
         if not self.userDB.hasUser(user):
             self.requestUserInfo(user)
 
+        # Get the connection information
         connection_info = self.userDB.getConnectionInfo(user)
         host = connection_info['host']
         port = connection_info['port']
+
+        # Sign the message and send it via the connection
         message = self._sign_message(message)
         self.connection.send_message(host, port, message.encode_message())
 
     def createQChatMessage(self, user, plaintext):
+        """
+        Creates an encrypted chat message
+        :param user: The user we want to create the message for
+        :param plaintext: The string we want to communicate via the message
+        :return: An encrypted QChat message object
+        """
+        # Check that we have a message key established with this user and establish one if none
         user_key = self.userDB.getMessageKey(user)
         if not user_key:
-            self._establish_key(user, 100)
+            self._establish_key(user, 16)
             user_key=self.userDB.getMessageKey(user)
+
+        # Encrypt the plaintext information
         nonce, ciphertext, tag = QChatCipher(user_key).encrypt(plaintext.encode("ISO-8859-1"))
+
+        # Construct the QChat Message data
         message_data = {
             "nonce": nonce.decode("ISO-8859-1"),
             "ciphertext": ciphertext.decode("ISO-8859-1"),
@@ -250,26 +474,43 @@ class QChatServer:
         return message
 
     def sendQChatMessage(self, user, plaintext):
+        """
+        Sends a QChat Message containing the plaintext information to the specified user
+        :param user: The user we wish to send the message to
+        :param plaintext: The plaintext information to communicate to the user
+        :return: None
+        """
+        # Ensure we have a route to the user
         if not self.userDB.hasUser(user):
             self.requestUserInfo(user)
 
+        # Create message object
         message = self.createQChatMessage(user, plaintext)
         self.sendMessage(user, message)
 
-    def get_message_history(self, user, count):
+    def getMessageHistory(self, user):
+        """
+        Returns the received message history stored in our mailbox for the specified user
+        :param user: The user to get message history for
+        :return: A list of decrypted messages that we have received from the user
+        """
         messages = []
-        for _ in range(count):
-            qm = self.mailbox.getMessage(user)
+        user_key = self.userDB.getMessageKey(user)
+        for _, qm in enumerate(self.mailbox.getMessages(user)):
+            # Error if someone else's message somehow got into this list
             if qm.sender != user:
                 raise Exception("Mailbox for {} contained message from {}".format(user, qm.sender))
+
             else:
-                user_key = self.userDB.getMessageKey(user)
+                # Obtain cipher data
                 nonce = qm.data['nonce'].encode("ISO-8859-1")
                 ciphertext = qm.data['ciphertext'].encode("ISO-8859-1")
                 tag = qm.data['tag'].encode("ISO-8859-1")
+
+                # Decrypt the essage
                 message = QChatCipher(user_key).decrypt((nonce, ciphertext, tag))
                 message.decode("ISO-8859-1")
+
                 messages.append(message)
 
         return messages
-

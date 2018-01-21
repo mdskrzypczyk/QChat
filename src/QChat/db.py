@@ -23,24 +23,30 @@ class UserDB:
         return self._get_user(user) is not None
 
     def getPublicKey(self, user):
-        return self._get_user(user).get('pub')
+        info = self._get_user(user)
+        if not info:
+            raise DBException("User {} does not exist in the database!")
+        return info.get('pub')
 
     def getMessageKey(self, user):
-        return self._get_user(user).get('message_key')
+        info = self._get_user(user)
+        if not info:
+            raise DBException("User {} does not exist in the database!")
+        return info.get('message_key')
 
     def getConnectionInfo(self, user):
-        user_info = self._get_user(user).get("connection")
-        connection_info = {
-            "host": user_info["host"],
-            "port": user_info["port"]
-        }
-        return connection_info
+        info = self._get_user(user)
+        if not info:
+            raise DBException("User {} does not exist in the database!")
+        return info.get('connection')
 
     def deleteUserInfo(self, user, fields):
         self.logger.debug("Deleting user {} info {}".format(user, fields))
-        user_info = self._get_user(user)
+        info = self._get_user(user)
+        if not info:
+            raise DBException("User {} does not exist in the database!")
         for field in fields:
-            user_info.pop(field)
+            info.pop(field)
 
     def deleteUser(self, user):
         self.logger.debug("Deleting user {}".format(user))
@@ -48,7 +54,8 @@ class UserDB:
 
     def changeUserInfo(self, user, **kwargs):
         self.logger.debug("Changing user {} with data {}".format(user, kwargs))
-        self.db[user].update(kwargs)
+        if self.hasUser(user):
+            self.db[user].update(kwargs)
 
     def addUser(self, user, **kwargs):
         self.logger.debug("Adding user {} with data {}".format(user, kwargs))

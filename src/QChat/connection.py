@@ -104,7 +104,6 @@ class QChatConnection:
             raise ConnectionError("Message data too long")
 
         self.logger.debug("Inserting message into queue")
-        self.logger.debug("{} {} {}".format(header, sender, message_data))
         m = MessageFactory().create_message(header, sender, message_data)
         self._append_message_to_queue(m)
         conn.close()
@@ -137,4 +136,3 @@ class QChatConnection:
         s.sendall(message)
         s.close()
         self.logger.debug("Sent message to {}:{}".format(host, port))
-        self.logger.debug("{}".format(message))

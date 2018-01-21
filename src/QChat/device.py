@@ -4,16 +4,32 @@ from QChat.messages import RQQBMessage
 
 class MeasurementDevice:
     def __init__(self, connection, relay_info):
+        """
+        Used to implement trusted/untrusted measurement devices for use in receiving BB84 states from source
+        and performing measurements on the qubits
+        :param connection:
+        :param relay_info:
+        """
         self.connection = connection
+
+        # Connection information to the server providing the EPR pairs
         self.relay_host = relay_info["host"]
         self.relay_port = relay_info["port"]
 
     def requestEPR(self, user):
+        """
+        Method used for sending a request for EPR pairs from the source
+        :param user: The user we want to share an EPR pair with
+        :return: None
+        """
         m = RQQBMessage(sender=self.connection.name, message_data={"user": user})
         self.connection.send_message(host=self.relay_host, port=self.relay_port, message=m.encode_message())
 
 
 class LeadDevice(MeasurementDevice):
+    """
+    Implements measurements and EPR retrieval for a protocol leader
+    """
     def measure(self, q, basis):
         if basis == 0:
             return q.measure()
@@ -21,7 +37,7 @@ class LeadDevice(MeasurementDevice):
             q.H()
             return q.measure()
 
-    def receiveEPR(self, timeout=5):
+    def receiveEPR(self, timeout=60):
         start = time.time()
         while time.time() - start < timeout:
             try:
@@ -33,6 +49,9 @@ class LeadDevice(MeasurementDevice):
 
 
 class FollowDevice(MeasurementDevice):
+    """
+    Implements measurements and EPR retrieval for a protocol follower
+    """
     def measure(self, q, basis):
         if basis == 0:
             q.rot_X(16)
@@ -43,7 +62,7 @@ class FollowDevice(MeasurementDevice):
         elif basis == 2:
             return q.measure()
 
-    def receiveEPR(self, timeout=5):
+    def receiveEPR(self, timeout=60):
         start = time.time()
         while time.time() - start < timeout:
             try:

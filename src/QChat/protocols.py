@@ -3,12 +3,14 @@ import time
 from QChat.device import LeadDevice, FollowDevice
 from QChat.ecc import ECC_Golay
 from QChat.log import QChatLogger
-from QChat.messages import PTCLMessage, BB84Message
+from QChat.messages import PTCLMessage, BB84Message, SPDSMessage
 
 LEADER_ROLE = 0
 FOLLOW_ROLE = 1
-IDLE_TIMEOUT = 5
+IDLE_TIMEOUT = 60
+BYTE_LEN = 8
 PCHSH = 0.8535533905932737
+MAX_GOLAY_ERROR = 0.13043478260869565
 
 
 class ProtocolException(Exception):
@@ -16,27 +18,29 @@ class ProtocolException(Exception):
 
 
 class QChatProtocol:
-    def __init__(self, peer_info, connection, n, ctrl_msg_q, outbound_q, role, relay_info):
+    def __init__(self, peer_info, connection, key_size, ctrl_msg_q, outbound_q, role, relay_info):
         """
         Initializes a protocol object that is used for executing quantum/classical exchange protocols
         :param peer_info:  Dictionary containing host, ip, port information
         :param connection: A QChatConnection object
-        :param n:          The number of qubits we will attempt to derive information from per round
+        :param key_size:   The length of the key we wish to derive
         :param ctrl_msg_q: Queue containing inbound messages from our peer
         :param outbound_q: Queue containing outbound message to our peer
         :param role:       Either LEADER_ROLE or FOLLOW_ROLE for coordinating the protocol
         """
         self.logger = QChatLogger(__name__)
         self.connection = connection
-        self.n = n
+        self.key_size = key_size
         self.ctrl_msg_q = ctrl_msg_q
         self.outbound_q = outbound_q
         self.peer_info = peer_info
         self.role = role
         self.relay_info = relay_info
         if role == LEADER_ROLE:
+            self.device = LeadDevice(self.connection, self.relay_info)
             self._lead_protocol()
         elif role == FOLLOW_ROLE:
+            self.device = FollowDevice(self.connection, self.relay_info)
             self._follow_protocol()
 
     def _lead_protocol(self):
@@ -70,7 +74,7 @@ class QChatProtocol:
         :return:
         """
         message = message_type(sender=self.connection.name, message_data=message_data)
-        self.outbound_q.put(message)
+        self.outbound_q.put((self.peer_info["user"], message))
 
     def exchange_messages(self, message_data, message_type):
         """
@@ -92,10 +96,6 @@ class QChatKeyProtocol(QChatProtocol):
     pass
 
 
-class QChatMessageProtocol(QChatProtocol):
-    pass
-
-
 class BB84_Purified(QChatKeyProtocol):
     """
     Implements the Purified BB84 protocol
@@ -103,11 +103,10 @@ class BB84_Purified(QChatKeyProtocol):
     name = "BB84_PURIFIED"
 
     def _lead_protocol(self):
-        self._send_control_message(message_data={"name": self.name, "n": self.n}, message_type=PTCLMessage)
+        self._send_control_message(message_data={"name": self.name, "key_size": self.key_size}, message_type=PTCLMessage)
         response = self._wait_for_control_message(message_type=BB84Message)
         if response.data["ACK"] != "ACK":
             raise ProtocolException("Failed to establish leader/role")
-
 
     def _follow_protocol(self):
         self._send_control_message(message_data={"ACK": "ACK"}, message_type=BB84Message)
@@ -120,11 +119,9 @@ class BB84_Purified(QChatKeyProtocol):
         """
         x = []
         theta = []
-        while len(x) < self.n:
-            if eavesdropper:
-                q = self.connection.cqc.createEPR(eavesdropper)
-            else:
-                q = self.connection.cqc.createEPR(self.peer_info["user"])
+        while len(x) < 100:
+            self.device.requestEPR(self.peer_info["user"])
+            q = self.device.receiveEPR()
 
             basisflip = random.randint(0, 1)
             if basisflip:
@@ -146,8 +143,8 @@ class BB84_Purified(QChatKeyProtocol):
         """
         x = []
         theta = []
-        while len(x) < self.n:
-            q = self.connection.cqc.recvEPR()
+        while len(x) < 100:
+            q = self.device.receiveEPR()
             basisflip = random.randint(0, 1)
             if basisflip:
                 q.H()
@@ -175,6 +172,12 @@ class BB84_Purified(QChatKeyProtocol):
         return x_remain
 
     def _estimate_error_rate(self, x, num_test_bits):
+        """
+        Estimates the error rate of the exchanged BB84 information
+        :param x: The measurement outcomes obtained
+        :param num_test_bits: The number of bits we should test
+        :return: The error rate of the communicated information
+        """
         test_bits = []
         test_indices = []
 
@@ -210,79 +213,6 @@ class BB84_Purified(QChatKeyProtocol):
                 num_error += 1
 
         return (num_error / num_test_bits)
-
-    def _device_independent_distribute_bb84(self):
-        x = []
-        theta = [random.randint(0, 1) for _ in range(self.n)]
-        device = LeadDevice(self.connection, self.relay_info)
-        for b in theta:
-            device.requestEPR(self.peer_info["user"])
-            q = device.receiveEPR()
-            x.append(device.measure(q, b))
-            m = self.exchange_messages(message_data={"ack": True}, message_type=BB84Message)
-            if not m.data["ack"]:
-                raise ProtocolException("Error distributing DI states")
-
-        return x, theta
-
-    def _device_independent_receive_bb84(self):
-        x = []
-        theta = [random.randint(0, 2) for _ in range(self.n)]
-        device = FollowDevice(self.connection, self.relay_info)
-        for b in theta:
-            q = device.receiveEPR()
-            x.append(device.measure(q, b))
-            m = self.exchange_messages(message_data={"ack": True}, message_type=BB84Message)
-            if not m.data["ack"]:
-                raise ProtocolException("Error receiving DI states")
-
-        return x, theta
-
-    def _device_independent_epr_test(self, x, theta):
-        m = self.exchange_messages(message_data={"theta": theta}, message_type=BB84Message)
-        theta_hat = m.data["theta"]
-        if self.role == LEADER_ROLE:
-            T = random.sample(range(len(x)), self.n // 2)
-            self._send_control_message(message_data={"T": T}, message_type=BB84Message)
-            Tp = [j for j in T if theta_hat[j] in [0, 1]]
-            Tpp = [j for j in T if theta[j] == 0 and theta_hat[j] == 2]
-            R = [j for j in set(range(len(x))) - set(T) if theta[j] == 0 and theta_hat[j] == 2]
-
-        elif self.role == FOLLOW_ROLE:
-            m = self._wait_for_control_message(message_type=BB84Message)
-            T = m.data["T"]
-            Tp = [j for j in T if theta[j] in [0, 1]]
-            Tpp = [j for j in T if theta_hat[j] == 0 and theta[j] == 2]
-            R = [j for j in set(range(len(x))) - set(T) if theta_hat[j] == 0 and theta[j] == 2]
-
-        x_T = [x[j] for j in T]
-        m = self.exchange_messages(message_data={"x_T": x_T}, message_type=BB84Message)
-        x_T_hat = m.data["x_T"]
-
-        winning = [j for j, x1, x2 in zip(Tp, x_T, x_T_hat) if x1 ^ x2 == theta[j] & theta_hat[j]]
-        p_win = len(winning) / len(Tp)
-        matching = [j for j, x1, x2 in zip(Tpp, x_T, x_T_hat) if x1 == x2]
-        p_match = len(matching) / len(Tpp)
-
-        e = 0.1
-        if p_win < PCHSH - e or p_match < 1 - e:
-            self.logger.debug(x_T)
-            self.logger.debug(x_T_hat)
-            self.logger.debug("CHSH Winners: {} out of {}".format(len(winning), Tp))
-            self.logger.debug("Matching: {} out of {}".format(len(matching), Tpp))
-            raise ProtocolException("Failed to pass CHSH test: p_win: {} p_match: {}".format(p_win, p_match))
-
-        x_remain = [x[r] for r in R]
-        return x_remain
-
-    def distill_device_independent_data(self):
-        if self.role == LEADER_ROLE:
-            x, theta = self._device_independent_distribute_bb84()
-        elif self.role == FOLLOW_ROLE:
-            x, theta = self._device_independent_receive_bb84()
-
-        x_remain = self._device_independent_epr_test(x, theta)
-        return x_remain
 
     def _reconcile_information(self, x, ecc=ECC_Golay()):
         """
@@ -339,6 +269,11 @@ class BB84_Purified(QChatKeyProtocol):
         return R.to_bytes(1, 'big')
 
     def distill_tested_data(self):
+        """
+        A wrapper for distributing the BB84 states between the two users and tests the error rate
+        of the measured data
+        :return: A list of the shared secret bits
+        """
         if self.role == LEADER_ROLE:
             x, theta = self._distribute_bb84_states()
         else:
@@ -349,32 +284,183 @@ class BB84_Purified(QChatKeyProtocol):
         num_test_bits = len(x_remain) // 2
         error_rate = self._estimate_error_rate(x_remain, num_test_bits)
 
-        if error_rate >= 0.5:
+        if error_rate >= MAX_GOLAY_ERROR:
             raise RuntimeError("Error rate of {}, aborting protocol".format(error_rate))
         return x_remain
 
     def execute(self):
+        """
+        A wrapper for the entire key derivation protocol
+        :return: Derived key of byte length key_size
+        """
         key = b''
         secret_bits = []
         reconciled = []
-        while len(key) < 16:
-            while len(reconciled) < 16:
-                while len(secret_bits) < 23:
+        while len(key) < self.key_size:
+            while len(reconciled) < 2*BYTE_LEN:
+                while len(secret_bits) < ECC_Golay.codeword_length:
                     secret_bits += self.distill_tested_data()
                 secret_bits, reconciled_bits = self._reconcile_information(secret_bits)
                 reconciled += reconciled_bits
-            reconciled_bytes = int(''.join([str(i) for i in reconciled[:16]]), 2).to_bytes(2, 'big')
-            reconciled = reconciled[16:]
+            reconciled_bytes = int(''.join([str(i) for i in reconciled[:2*BYTE_LEN]]), 2).to_bytes(2, 'big')
+            reconciled = reconciled[2*BYTE_LEN:]
             b = self._amplify_privacy(reconciled_bytes)
             if b:
                 key += b
         self.logger.debug("Derived key {}".format(key))
         return key
 
+
+class DIQKD(BB84_Purified):
+    def _device_independent_distribute_bb84(self):
+        x = []
+        theta = [random.randint(0, 1) for _ in range(100)]
+        device = LeadDevice(self.connection, self.relay_info)
+        for b in theta:
+            device.requestEPR(self.peer_info["user"])
+            q = device.receiveEPR()
+            x.append(device.measure(q, b))
+            m = self.exchange_messages(message_data={"ack": True}, message_type=BB84Message)
+            if not m.data["ack"]:
+                raise ProtocolException("Error distributing DI states")
+
+        return x, theta
+
+    def _device_independent_receive_bb84(self):
+        x = []
+        theta = [random.randint(0, 2) for _ in range(100)]
+        device = FollowDevice(self.connection, self.relay_info)
+        for b in theta:
+            q = device.receiveEPR()
+            x.append(device.measure(q, b))
+            m = self.exchange_messages(message_data={"ack": True}, message_type=BB84Message)
+            if not m.data["ack"]:
+                raise ProtocolException("Error receiving DI states")
+
+        return x, theta
+
+    def _device_independent_epr_test(self, x, theta):
+        m = self.exchange_messages(message_data={"theta": theta}, message_type=BB84Message)
+        theta_hat = m.data["theta"]
+        if self.role == LEADER_ROLE:
+            T = random.sample(range(len(x)), 100 // 2)
+            self._send_control_message(message_data={"T": T}, message_type=BB84Message)
+            Tp = [j for j in T if theta_hat[j] in [0, 1]]
+            Tpp = [j for j in T if theta[j] == 0 and theta_hat[j] == 2]
+            R = [j for j in set(range(len(x))) - set(T) if theta[j] == 0 and theta_hat[j] == 2]
+
+        elif self.role == FOLLOW_ROLE:
+            m = self._wait_for_control_message(message_type=BB84Message)
+            T = m.data["T"]
+            Tp = [j for j in T if theta[j] in [0, 1]]
+            Tpp = [j for j in T if theta_hat[j] == 0 and theta[j] == 2]
+            R = [j for j in set(range(len(x))) - set(T) if theta_hat[j] == 0 and theta[j] == 2]
+
+        x_T = [x[j] for j in T]
+        m = self.exchange_messages(message_data={"x_T": x_T}, message_type=BB84Message)
+        x_T_hat = m.data["x_T"]
+
+        winning = [j for j, x1, x2 in zip(Tp, x_T, x_T_hat) if x1 ^ x2 == theta[j] & theta_hat[j]]
+        p_win = len(winning) / len(Tp)
+        matching = [j for j, x1, x2 in zip(Tpp, x_T, x_T_hat) if x1 == x2]
+        p_match = len(matching) / len(Tpp)
+
+        e = 0.1
+        if p_win < PCHSH - e or p_match < 1 - e:
+            self.logger.debug(x_T)
+            self.logger.debug(x_T_hat)
+            self.logger.debug("CHSH Winners: {} out of {}".format(len(winning), Tp))
+            self.logger.debug("Matching: {} out of {}".format(len(matching), Tpp))
+            raise ProtocolException("Failed to pass CHSH test: p_win: {} p_match: {}".format(p_win, p_match))
+
+        x_remain = [x[r] for r in R]
+        return x_remain
+
+    def distill_device_independent_data(self):
+        if self.role == LEADER_ROLE:
+            x, theta = self._device_independent_distribute_bb84()
+        elif self.role == FOLLOW_ROLE:
+            x, theta = self._device_independent_receive_bb84()
+
+        x_remain = self._device_independent_epr_test(x, theta)
+
+        return x_remain
+
+
+class QChatMessageProtocol(QChatProtocol):
+    pass
+
+
+class SuperDenseCoding(QChatMessageProtocol):
+    """
+    Implements sending SuperDense Coded data
+    """
+    name = "SUPERDENSE"
+
+    def _lead_protocol(self):
+        self._send_control_message(message_data={"name": self.name, "n": self.n}, message_type=PTCLMessage)
+        response = self._wait_for_control_message(message_type=SPDSMessage)
+        if response.data["ACK"] != "ACK":
+            raise ProtocolException("Failed to establish leader/role")
+
+    def _follow_protocol(self):
+        self._send_control_message(message_data={"ACK": "ACK"}, message_type=SPDSMessage)
+
+    def send_message(self, message):
+        user = self.peer_info["user"]
+        for b in message:
+            for p in range(4):
+                b2 = (b >> 2*p) & 1
+                b1 = (b >> (2*p) + 1) & 1
+
+                q = self.connection.cqc.createEPR(user)
+                m = self.exchange_messages(message_data={"ack":True}, message_type=SPDSMessage)
+                if not m.data["ack"]:
+                    raise ProtocolException("Failed to send {}'s qubit".format(user))
+                if b2:
+                    q.X()
+                if b1:
+                    q.Z()
+                self.connection.cqc.sendQubit(q, user)
+                m = self.exchange_messages(message_data={"ack": True}, message_type=SPDSMessage)
+                if not m.data["ack"]:
+                    raise ProtocolException("Failed to send EPR to {}".format(user))
+                m = self._wait_for_control_message(message_type=SPDSMessage)
+                if not m.data["ack"]:
+                    raise ProtocolException("Failed to send EPR to {}".format(user))
+
+        self.exchange_messages(message_data={"fin": True}, message_type=SPDSMessage)
+
+    def receive_message(self):
+        user = self.peer_info["user"]
+        message = b''
+        while True:
+            m = self.exchange_messages(message_data={"ack": True}, message_type=SPDSMessage)
+            if m.data.get("fin"):
+                return message
+            elif not m.data["ack"]:
+                raise ProtocolException("Error receiving qubit")
+            b = 0
+            for p in range(4):
+                q = self.connection.cqc.recvEPR()
+                m = self.exchange_messages(message_data={"ack": True}, message_type=SPDSMessage)
+                if not m.data["ack"]:
+                    raise ProtocolException("Failed to send {}'s qubit".format(user))
+                q2 = self.connection.cqc.recvQubit()
+                q.cnot(q2)
+                q2.H()
+                b |= (q.measure() << 2*p)
+                b |= (q2.measure() << (2*p + 1))
+                self._send_control_message(message_data={"ack": True}, message_type=SPDSMessage)
+            message += b.to_bytes(1, 'big')
+
+
+
 class ProtocolFactory:
     def __init__(self):
         self.protocol_mapping = {
-            BB84_Purified.name: BB84_Purified
+            BB84_Purified.name: BB84_Purified,
+            SuperDenseCoding.name: SuperDenseCoding
         }
 
     def createProtocol(self, name):
