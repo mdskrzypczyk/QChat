@@ -12,8 +12,8 @@ from QChat.db import UserDB
 from QChat.log import QChatLogger
 from QChat.mailbox import QChatMailbox
 from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
-from QChat.protocols import ProtocolFactory, QChatKeyProtocol, BB84_Purified, SuperDenseCoding, \
-                            LEADER_ROLE, FOLLOW_ROLE
+from QChat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProtocol, BB84_Purified, \
+                            SuperDenseCoding, LEADER_ROLE, FOLLOW_ROLE
 
 
 class DaemonThread(threading.Thread):
@@ -147,6 +147,9 @@ class QChatServer:
 
         # Verify the signature on the message for key message types
         if message.verify:
+            if not self.userDB.hasUser(message.sender):
+                self.requestUserInfo(message.sender)
+
             message, signature = self._strip_signature(message)
             self._verify_message(message, signature)
 
@@ -227,11 +230,12 @@ class QChatServer:
         peer_info.update(self.getConnectionInfo(message.sender))
 
         # Construct the protocol object
-        protocol_class = ProtocolFactory().createProtocol(name=message.data['name'])
-        p = protocol_class(peer_info, self.connection, message.data['key_size'], self.control_message_queue[message.sender],
-                           self.outbound_queue, FOLLOW_ROLE, self.root_config)
+        protocol_class = ProtocolFactory().createProtocol(name=message.data.pop('name'))
+        self.logger.debug("Following {} protocol with user {}".format(protocol_class.name, message.sender))
 
-        self.logger.debug("Following {} protocol with user {}".format(p.name, message.sender))
+        p = protocol_class(**message.data, peer_info=peer_info, connection=self.connection,
+                           ctrl_msg_q=self.control_message_queue[message.sender],
+                           outbound_q=self.outbound_queue, role=FOLLOW_ROLE, relay_info=self.root_config)
 
         # Establish a key with our peer
         if isinstance(p, QChatKeyProtocol):
@@ -239,7 +243,7 @@ class QChatServer:
             self.userDB.changeUserInfo(message.sender, message_key=key)
 
         # Exchange a message with our peer
-        elif isinstance(p, SuperDenseCoding):
+        elif isinstance(p, QChatMessageProtocol):
             self.logger.debug("Received SuperDense coded message from {}: {}".format(message.sender,
                                                                                      p.receive_message()))
 
@@ -265,6 +269,7 @@ class QChatServer:
 
         # Send other half to peer
         self.connection.cqc.sendQubit(q, peer)
+        self.logger.info("Shared qubits between {} and {}".format(message.sender, peer))
 
     def _store_control_message(self, message):
         """
@@ -273,6 +278,7 @@ class QChatServer:
         :return: None
         """
         self.control_message_queue[message.sender].append(message)
+        self.logger.debug("Stored message into control queue")
 
     def _get_registration_data(self):
         """
@@ -384,6 +390,7 @@ class QChatServer:
         """
         message = RGSTMessage(sender=self.name, message_data=self._get_registration_data())
         self.connection.send_message(host, port, message.encode_message())
+        self.logger.info("Sent registration to {}:{}".format(host, port))
 
     def requestUserInfo(self, user):
         """
@@ -409,10 +416,6 @@ class QChatServer:
         while not self.userDB.hasUser(user):
             if time.time() - wait_start > 2:
                 raise Exception("Failed to get {} info from registry".format(user))
-
-        # Send a registration message to the user we want information for
-        connection = self.getConnectionInfo(user)
-        self.sendRegistration(host=connection["host"], port=connection["port"])
 
     def sendUserInfo(self, user, connection):
         """
@@ -471,6 +474,7 @@ class QChatServer:
             "tag": tag.decode("ISO-8859-1")
         }
         message = QCHTMessage(sender=self.name, message_data=message_data)
+        self.logger.debug("Created QChat message")
         return message
 
     def sendQChatMessage(self, user, plaintext):
@@ -487,6 +491,33 @@ class QChatServer:
         # Create message object
         message = self.createQChatMessage(user, plaintext)
         self.sendMessage(user, message)
+        self.logger.info("Sent QChat message to {}".format(user))
+
+    def sendSuperdenseMessage(self, user, plaintext):
+        """
+        Sends a superdense coded message to the specified user
+        :param user: The user we want to send the superdense message to
+        :param plaintext: The plaintext we wish to communicate
+        :return: None
+        """
+        # Get user information if we don't have it
+        if not self.userDB.hasUser(user):
+            self.requestUserInfo(user)
+
+        # Construct peer info for the protocol
+        peer_info = {
+            "user": user,
+        }
+        peer_info.update(self.getConnectionInfo(user))
+
+        # Prepare the protocol
+        p = SuperDenseCoding(peer_info=peer_info, connection=self.connection,
+                             ctrl_msg_q=self.control_message_queue[user], outbound_q=self.outbound_queue,
+                             role=LEADER_ROLE, relay_info=self.root_config)
+
+        # Send the message using the protocol
+        p.send_message(plaintext.encode("ISO-8859-1"))
+        self.logger.info("Sent superdense message to {}".format(user))
 
     def getMessageHistory(self, user):
         """

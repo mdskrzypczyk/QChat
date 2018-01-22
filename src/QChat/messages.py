@@ -97,14 +97,6 @@ class PUTUMessage(Message):
     strip = True
 
 
-class BB84Message(Message):
-    """
-    BB84 QKD Protocol control messages used for coordinating BB84 protocol specific
-    classical messages between executing protocols
-    """
-    header = b'BB84'
-
-
 class PTCLMessage(Message):
     """
     Protocol initialization message that instructs the recieving host to assume the
@@ -116,11 +108,41 @@ class PTCLMessage(Message):
 
 
 class RQQBMessage(Message):
+    """
+    ReQuest QuBit message that instructs a server to act as an EPR source between to applications
+    in the network
+    """
     header = b'RQQB'
 
 
+class BB84Message(Message):
+    """
+    BB84 QKD Protocol control messages used for coordinating BB84 protocol specific
+    classical messages between executing protocols
+    """
+    header = b'BB84'
+    verify = True
+    strip = True
+
+
+class DQKDMessage(Message):
+    """
+    DIQKD Protocol control messages used for coordinating DIQKD protocol specific
+    classical messages between executing protocols
+    """
+    header = b'DQKD'
+    verify = True
+    strip = True
+
+
 class SPDSMessage(Message):
+    """
+    SuPerDenSe protocol control message used for coordinating SuperDense Coding protocol
+    specific classical messages between executing protocols
+    """
     header = b'SPDS'
+    verify = True
+    strip = True
 
 
 class MessageFactory:
@@ -139,7 +161,8 @@ class MessageFactory:
             BB84Message.header: BB84Message,
             PTCLMessage.header: PTCLMessage,
             RQQBMessage.header: RQQBMessage,
-            SPDSMessage.header: SPDSMessage
+            SPDSMessage.header: SPDSMessage,
+            DQKDMessage.header: DQKDMessage
         }
 
     def create_message(self, header, sender, message_data):

@@ -38,9 +38,16 @@ class LeadDevice(MeasurementDevice):
             return q.measure()
 
     def receiveEPR(self, timeout=60):
+        """
+        Receives an EPR half and handles timeout
+        :param timeout: The length in seconds to wait before timing out
+        :return: The received qubit
+        """
         start = time.time()
         while time.time() - start < timeout:
             try:
+                # The leader will be responsible for requesting distribution from the source, so here we
+                # follow CQC's implementation and use recvEPR to obtain the qubit
                 q = self.connection.cqc.recvEPR()
                 return q
             except:
@@ -63,9 +70,16 @@ class FollowDevice(MeasurementDevice):
             return q.measure()
 
     def receiveEPR(self, timeout=60):
+        """
+        Receives an EPR half and handles timeout
+        :param timeout: The length in seconds to wait before timing out
+        :return: The received qubit
+        """
         start = time.time()
         while time.time() - start < timeout:
             try:
+                # As the follower we will be getting our qubit via a sendQubit call so we need
+                # to use the appropriate CQC command to retrieve it
                 q = self.connection.cqc.recvQubit()
                 return q
             except:

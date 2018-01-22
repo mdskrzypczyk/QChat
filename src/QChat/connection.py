@@ -26,16 +26,28 @@ class QChatConnection:
         :param name:   Name of the host (Must be one available by SimulaQron CQC)
         :param config: Configuration for the connection
         """
+        # Lock on the connection
         self.lock = threading.Lock()
+
+        # Logger
         self.logger = QChatLogger(__name__)
+
+        # CQC and listening socket
         self.cqc = None
         self.listening_socket = None
         self.cqc = CQCConnection(name)
+
+        # Host name the connection belongs to
         self.name = name
+
+        # Listening configuration
         self.host = config['host']
         self.port = config['port']
+
+        # Inbound message queue
         self.message_queue = []
-        self.stored_qubits = {}
+
+        # Daemon threads
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.classical_thread = DaemonThread(target=self.listen_for_classical)
 
@@ -65,8 +77,17 @@ class QChatConnection:
             self.listening_socket.listen(1)
             conn, addr = self.listening_socket.accept()
             self.logger.debug("Got connection from {}".format(addr))
-            t = threading.Thread(target=self._handle_connection, args=(conn, addr))
-            t.start()
+            self.start_handler(conn, addr)
+
+    def start_handler(self, conn, addr):
+        """
+        Simple connection handler that passes work to thread
+        :param conn: Connection information from socket
+        :param addr: Address information from socket
+        :return: None
+        """
+        t = threading.Thread(target=self._handle_connection, args=(conn, addr))
+        t.start()
 
     def _handle_connection(self, conn, addr):
         """
@@ -76,22 +97,27 @@ class QChatConnection:
         :param addr: Address information from sockets
         :return: None
         """
+        # Verify the header structure
         header = conn.recv(HEADER_LENGTH)
         if header not in MessageFactory().message_mapping.keys():
             raise ConnectionError("Incorrect message header")
 
+        # Verify the sender structe
         padded_sender = conn.recv(MAX_SENDER_LENGTH)
         if len(padded_sender) != MAX_SENDER_LENGTH:
             raise ConnectionError("Incorrect sender length")
 
+        # Verify the sender info
         sender = str(padded_sender.replace(b'\x00', b''), 'utf-8')
         if len(sender) == 0:
             raise ConnectionError("Invalid sender")
 
+        # Get the message size
         size = conn.recv(PAYLOAD_SIZE)
         if len(size) != PAYLOAD_SIZE:
             raise ConnectionError("Incorrect payload size")
 
+        # Retrieve the message data
         data_length = int.from_bytes(size, 'big')
         message_data = b''
         while len(message_data) < data_length:
@@ -100,9 +126,11 @@ class QChatConnection:
                 raise ConnectionError("Message data too short")
             message_data += data
 
+        # Verify the length of the sent data
         if len(message_data) > data_length or conn.recv(1):
             raise ConnectionError("Message data too long")
 
+        # Pass the message up
         self.logger.debug("Inserting message into queue")
         m = MessageFactory().create_message(header, sender, message_data)
         self._append_message_to_queue(m)
