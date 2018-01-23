@@ -13,7 +13,7 @@ from QChat.log import QChatLogger
 from QChat.mailbox import QChatMailbox
 from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
 from QChat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProtocol, BB84_Purified, \
-                            SuperDenseCoding, LEADER_ROLE, FOLLOW_ROLE
+                            DIQKD, SuperDenseCoding, LEADER_ROLE, FOLLOW_ROLE
 
 
 class DaemonThread(threading.Thread):

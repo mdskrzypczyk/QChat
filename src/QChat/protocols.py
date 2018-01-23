@@ -498,13 +498,13 @@ class DIQKD(BB84_Purified):
         x_T_hat = m.data["x_T"]
 
         # Calculate the number of rounds that pass the CHSH game
-        winning = [j for j, x1, x2 in zip(Tp, x_T, x_T_hat) if x1 ^ x2 == theta[j] & theta_hat[j]]
+        winning = [j for j, x1, x2 in zip(T, x_T, x_T_hat) if (x1 ^ x2) == (theta[j] & theta_hat[j]) and j in Tp]
 
         # Calculate the probability of winning the CHSH game using the device's implemented measurements
         p_win = len(winning) / len(Tp)
 
         # Calculate the number of rounds that matched when measured in the "same basis"
-        matching = [j for j, x1, x2 in zip(Tpp, x_T, x_T_hat) if x1 == x2]
+        matching = [j for j, x1, x2 in zip(T, x_T, x_T_hat) if x1 == x2 and j in Tpp]
 
         # Calculate the error rate of the "same basis" measurements
         p_match = len(matching) / len(Tpp)
@@ -528,6 +528,8 @@ class DIQKD(BB84_Purified):
             x, theta = self._device_independent_distribute_bb84()
         elif self.role == FOLLOW_ROLE:
             x, theta = self._device_independent_receive_bb84()
+
+        self.logger.debug("Beginning EPR Tests")
 
         # Test some of the data to ensure the devices we are using "qualify"
         x_remain = self._device_independent_epr_test(x, theta)
