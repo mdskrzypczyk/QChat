@@ -414,7 +414,7 @@ class QChatServer:
         # Wait for a response from the root registry
         wait_start = time.time()
         while not self.userDB.hasUser(user):
-            if time.time() - wait_start > 2:
+            if time.time() - wait_start > 10:
                 raise Exception("Failed to get {} info from registry".format(user))
 
     def sendUserInfo(self, user, connection):

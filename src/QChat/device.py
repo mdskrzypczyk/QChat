@@ -61,12 +61,10 @@ class FollowDevice(MeasurementDevice):
     """
     def measure(self, q, basis):
         if basis == 0:
-            q.rot_X(240)
-            q.rot_Z(240)
+            q.rot_Y(240)
             return q.measure()
         elif basis == 1:
-            q.rot_X(208)
-            q.rot_Z(208)
+            q.rot_Y(208)
             return q.measure()
         elif basis == 2:
             return q.measure()
