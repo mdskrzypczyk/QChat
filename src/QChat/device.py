@@ -61,12 +61,10 @@ class FollowDevice(MeasurementDevice):
     """
     def measure(self, q, basis):
         if basis == 0:
-            q.rot_Y(240)
+            q.rot_Y(48)
             return q.measure()
         elif basis == 1:
-            q.rot_Y(208)
-            return q.measure()
-        elif basis == 2:
+            q.rot_Y(16)
             return q.measure()
 
     def receiveEPR(self, timeout=60):
