@@ -158,10 +158,13 @@ class BB84_Purified(QChatKeyProtocol):
         while len(x) < ROUND_SIZE:
             # Request our EPR source to distribute the pairs
             if self.role == LEADER_ROLE:
+                self.logger.debug("Requesting EPR pair")
                 self.device.requestEPR(self.peer_info["user"])
 
             # Receive our half of the EPR pair
+            self.logger.debug("Trying to receive EPR pair")
             q = self.device.receiveEPR()
+            self.logger.debug("Successfully received!")
 
             # Randomly measure in Hadamard/Standard basis
             basisflip = random.randint(0, 1)

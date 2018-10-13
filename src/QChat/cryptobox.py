@@ -1,7 +1,7 @@
 from Crypto.Cipher import AES
-from Crypto.PublicKey import DSA
-from Crypto.Hash import SHA256
-from Crypto.Signature import DSS
+from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA256, SHA384
+from Crypto.Signature import DSS, pkcs1_15
 
 
 class QChatCipher:
@@ -31,14 +31,14 @@ class QChatSigner:
     be retained
     """
     def __init__(self, key=None):
-        self.key = DSA.generate(1024) if not key else key
+        self.key = RSA.generate(1024) if not key else key
 
     def get_pub(self):
         return self.key.publickey().exportKey()
 
     def sign(self, data):
-        hash_obj = SHA256.new(data)
-        signer = DSS.new(self.key, 'fips-186-3')
+        hash_obj = SHA384.new(data)
+        signer = pkcs1_15.new(self.key)
         signature = signer.sign(hash_obj)
         return signature
 
@@ -48,11 +48,11 @@ class QChatVerifier:
     Class that implements a message verification interface
     """
     def __init__(self, pubkey):
-        self.pubkey = DSA.import_key(pubkey)
+        self.pubkey = RSA.import_key(pubkey)
 
     def verify(self, data, sig):
-        hash_obj = SHA256.new(data)
-        verifier = DSS.new(self.pubkey, 'fips-186-3')
+        hash_obj = SHA384.new(data)
+        verifier = pkcs1_15.new(self.pubkey)
         try:
             verifier.verify(hash_obj, sig)
             return True
