@@ -295,7 +295,7 @@ class QChatServer:
 
         return reg_data
 
-    def _establish_key(self, user, key_size, protocol_class=DIQKD):
+    def _establish_key(self, user, key_size, protocol_class=BB84_Purified):
         """
         Internal method for leading a key establishment protocol
         :param user: The user we want to establish the shared key with
