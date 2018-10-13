@@ -1,6 +1,6 @@
 import time
 from QChat.messages import RQQBMessage
-
+from QChat.log import QChatLogger
 
 class MeasurementDevice:
     def __init__(self, connection, relay_info):
@@ -11,6 +11,7 @@ class MeasurementDevice:
         :param relay_info:
         """
         self.connection = connection
+        self.logger = QChatLogger(__name__)
 
         # Connection information to the server providing the EPR pairs
         self.relay_host = relay_info["host"]

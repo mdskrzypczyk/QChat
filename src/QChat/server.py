@@ -2,9 +2,9 @@ import threading
 import time
 import json
 import os
+import random
 from collections import defaultdict
 from functools import partial
-from queue import Queue
 from QChat.connection import QChatConnection
 from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from QChat.db import UserDB
@@ -50,6 +50,9 @@ class QChatServer:
 
         # Load ourselves into our DB
         self.userDB.addUser(user=self.name, pub=self.signer.get_pub(), **self.connection.get_connection_info())
+
+        # Storage of distributed qubit information
+        self.qubit_history = defaultdict(list)
 
         # Start our inbound/outbound message handlers
         self.message_processor = DaemonThread(target=self.read_from_connection)
@@ -137,7 +140,8 @@ class QChatServer:
         proc_map = {
             RGSTMessage.header: partial(self._pass_message_data, handler=self.registerUser),
             GETUMessage.header: partial(self._pass_message_data, handler=self.sendUserInfo),
-            PUTUMessage.header: partial(self._pass_message_data, handler=self.addUserInfo)
+            PUTUMessage.header: partial(self._pass_message_data, handler=self.addUserInfo),
+            RQQBMessage.header: self._distribute_qubits
         }
 
         handler = proc_map.get(message.header, self._store_control_message)
@@ -212,6 +216,30 @@ class QChatServer:
         self.logger.debug("Constructing registration data: {}".format(reg_data))
 
         return reg_data
+
+    def _distribute_qubits(self, message):
+        """
+        Internal method that allows the server to act as an EPR source.  For use in modeling the Purified BB84
+        protocol
+        :param message: Message containing user information for EPR distribution
+        :return: None
+        """
+        # First send half to the message sender and store the second
+        q = self.connection.cqc.createEPR(message.sender)
+
+        # Optionally attack the distribution, comparison should be change to control influence
+        peer = message.data["user"]
+
+        p = random.random()
+        if p < 0:
+            # Store our measurement and send a new qubit to the peer
+            outcome = q.measure()
+            self.qubit_history[peer].append(outcome)
+            q = qubit(self.connection.cqc)
+
+        # Send other half to peer
+        self.connection.cqc.sendQubit(q, peer)
+        self.logger.info("Shared qubits between {} and {}".format(message.sender, peer))
 
     def hasUser(self, user):
         """

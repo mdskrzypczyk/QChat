@@ -158,7 +158,7 @@ class BB84_Purified(QChatKeyProtocol):
         while len(x) < ROUND_SIZE:
             # Request our EPR source to distribute the pairs
             if self.role == LEADER_ROLE:
-                self.logger.debug("Requesting EPR pair")
+                self.logger.debug("Requesting EPR pair with {}".format(self.peer_info["user"]))
                 self.device.requestEPR(self.peer_info["user"])
 
             # Receive our half of the EPR pair
