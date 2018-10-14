@@ -22,7 +22,7 @@ class DaemonThread(threading.Thread):
 
 
 class QChatServer:
-    def __init__(self, name, cqcFilePath=None):
+    def __init__(self, name, cqcFile=None):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
@@ -37,7 +37,7 @@ class QChatServer:
         self.root_config = self._load_server_config(self.config.get("root"))
 
         # Connection to other applications
-        self.connection = QChatConnection(name=name, config=self.config, cqcFilePath=cqcFilePath)
+        self.connection = QChatConnection(name=name, config=self.config, cqcFile=cqcFile)
 
         # Inbound control messages for protocols
         self.control_message_queue = defaultdict(list)

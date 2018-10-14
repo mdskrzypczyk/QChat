@@ -20,7 +20,7 @@ class DaemonThread(threading.Thread):
 
 
 class QChatConnection:
-    def __init__(self, name, config, cqcFilePath=None):
+    def __init__(self, name, config, cqcFile=None):
         """
         Initialize a connection to the CQC server and
         :param name:   Name of the host (Must be one available by SimulaQron CQC)
@@ -35,7 +35,7 @@ class QChatConnection:
         # CQC and listening socket
         self.cqc = None
         self.listening_socket = None
-        self.cqc = CQCConnection(name=name, cqcFile=cqcFilePath)
+        self.cqc = CQCConnection(name=name, cqcFile=cqcFile)
 
         # Host name the connection belongs to
         self.name = name
