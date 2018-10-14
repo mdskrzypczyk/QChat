@@ -11,7 +11,7 @@ CLIENTS = {
     "Alice": 33334,
 }
 
-logger = logging.getLogger("QChatClinetRPCServer")
+logger = logging.getLogger("QChatClientRPCServer")
 logger.setLevel(logging.DEBUG)
 
 
