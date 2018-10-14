@@ -9,7 +9,7 @@ c = QChatClient("Bob")
 
 # Spin to keep the server alive
 while True:
-    messages = c.getMessageHistory("Bob")
+    messages = c.getMessageHistory()
     if messages:
         print("Got messages!: {}".format(messages))
         break

@@ -52,7 +52,7 @@ class LeadDevice(MeasurementDevice):
                 q = self.connection.cqc.recvEPR()
                 return q
             except:
-                pass
+                time.sleep(0.005)
         raise Exception("Timed out waiting for EPR")
 
 
