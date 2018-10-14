@@ -6,7 +6,7 @@ from xmlrpc.server import SimpleXMLRPCRequestHandler
 from QChat.client import QChatClient
 
 
-logger = logging.getLogger("QChatClinetRPCServer")
+logger = logging.getLogger("QChatClientRPCServer")
 logger.setLevel(logging.DEBUG)
 
 

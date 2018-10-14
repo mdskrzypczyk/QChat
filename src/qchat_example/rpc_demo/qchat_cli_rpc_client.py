@@ -8,7 +8,7 @@ import xmlrpc.client
 
 from threading import Thread
 
-logger = logging.getLogger("QChatCLIRPCCline")
+logger = logging.getLogger("QChatCLIRPCClient")
 logger.setLevel(logging.DEBUG)
 
 
