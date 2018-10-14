@@ -9,6 +9,7 @@ from QChat.db import UserDB
 from QChat.log import QChatLogger
 from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
 
+GLOBAL_SLEEP_TIME = 0.001
 
 class DaemonThread(threading.Thread):
     """
@@ -98,12 +99,10 @@ class QChatCore:
         Processes inbound messages from the application connection
         :return: None
         """
-        while True:
+        while not time.sleep(GLOBAL_SLEEP_TIME):
             message = self.connection.recv_message()
             if message:
                 self.start_process_thread(message)
-            else:
-                time.sleep(0.005)
 
     def start_process_thread(self, message):
         """
@@ -113,6 +112,35 @@ class QChatCore:
         """
         t = threading.Thread(target=self.process_message, args=(message,))
         t.start()
+
+    def process_message(self, message):
+        """
+        The primary message handling entrypoint, performs signature verification/stripping before passing the
+        message to a specific handler
+        :param message: The inbound message from the application connection
+        :return: None
+        """
+        self.logger.debug("Processing {} message from {}: {}".format(message.header,
+                                                                     message.sender,
+                                                                     message.data))
+
+        # Verify the signature on the message for key message types
+        if message.verify:
+            if not self.userDB.hasUser(message.sender):
+                self.requestUserInfo(message.sender)
+
+            message, signature = self._strip_signature(message)
+            self._verify_message(message, signature)
+
+        # Strip unnecessary signature information should it not be necessary for the message type
+        elif message.strip:
+            message, _ = self._strip_signature(message)
+
+
+        handler = self.proc_map.get(message.header, self._store_control_message)
+        handler(message)
+
+        self.logger.debug("Completed processing message")
 
     def _sign_message(self, message):
         """
@@ -202,8 +230,9 @@ class QChatCore:
             self.logger.debug("Get bulk user info!")
             for info in kwargs["info"]:
                 user_name = info.pop("user")
-                self.logger.debug("Adding to user {} info {}".format(user_name, info))
-                self.userDB.addUser(user, **info)
+                if not self.userDB.hasUser(user_name):
+                    self.logger.debug("Adding to user {} info {}".format(user_name, info))
+                    self.userDB.addUser(user_name, **info)
 
         else:
             self.logger.debug("Adding to user {} info {}".format(user, kwargs))
@@ -265,10 +294,11 @@ class QChatCore:
         self.connection.send_message(self.root_config["host"], self.root_config["port"], m.encode_message())
 
         # Wait for a response from the root registry
-        wait_start = time.time()
-        while not self.userDB.hasUser(user):
-            if time.time() - wait_start > 10:
-                raise Exception("Failed to get {} info from registry".format(user))
+        if user != "*":
+            wait_start = time.time()
+            while not self.userDB.hasUser(user):
+                if time.time() - wait_start > 10:
+                    raise Exception("Failed to get {} info from registry".format(user))
 
     def sendUserInfo(self, user, connection):
         """

@@ -1,4 +1,5 @@
 import time
+from QChat.core import GLOBAL_SLEEP_TIME
 from QChat.messages import RQQBMessage
 from QChat.log import QChatLogger
 
@@ -45,14 +46,14 @@ class LeadDevice(MeasurementDevice):
         :return: The received qubit
         """
         start = time.time()
-        while time.time() - start < timeout:
+        while not time.sleep(GLOBAL_SLEEP_TIME) and time.time() - start < timeout:
             try:
                 # The leader will be responsible for requesting distribution from the source, so here we
                 # follow CQC's implementation and use recvEPR to obtain the qubit
                 q = self.connection.cqc.recvEPR()
                 return q
             except:
-                time.sleep(0.005)
+                pass
         raise Exception("Timed out waiting for EPR")
 
 
@@ -77,7 +78,7 @@ class FollowDevice(MeasurementDevice):
         :return: The received qubit
         """
         start = time.time()
-        while time.time() - start < timeout:
+        while not time.sleep(GLOBAL_SLEEP_TIME) and time.time() - start < timeout:
             try:
                 # As the follower we will be getting our qubit via a sendQubit call so we need
                 # to use the appropriate CQC command to retrieve it

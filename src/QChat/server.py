@@ -10,42 +10,16 @@ class QChatServer(QChatCore):
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
         """
-        super(QChatServer, self).__init__(name=name, cqcFile=cqcFile)
-
-    def process_message(self, message):
-        """
-        The primary message handling entrypoint, performs signature verification/stripping before passing the
-        message to a specific handler
-        :param message: The inbound message from the application connection
-        :return: None
-        """
-        self.logger.debug("Processing {} message from {}: {}".format(message.header,
-                                                                     message.sender,
-                                                                     message.data))
-
-        # Verify the signature on the message for key message types
-        if message.verify:
-            if not self.userDB.hasUser(message.sender):
-                self.requestUserInfo(message.sender)
-
-            message, signature = self._strip_signature(message)
-            self._verify_message(message, signature)
-
-        # Strip unnecessary signature information should it not be necessary for the message type
-        elif message.strip:
-            message, _ = self._strip_signature(message)
 
         # Mapping of message headers to their appropriate handlers
-        proc_map = {
+        self.proc_map = {
             RGSTMessage.header: partial(self._pass_message_data, handler=self.registerUser),
             GETUMessage.header: partial(self._pass_message_data, handler=self.sendUserInfo),
             PUTUMessage.header: partial(self._pass_message_data, handler=self.addUserInfo),
             RQQBMessage.header: self._distribute_qubits
         }
 
-        handler = proc_map.get(message.header, self._store_control_message)
-        handler(message)
-        self.logger.debug("Completed processing message")
+        super(QChatServer, self).__init__(name=name, cqcFile=cqcFile)
 
     def _distribute_qubits(self, message):
         """

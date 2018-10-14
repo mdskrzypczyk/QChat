@@ -2,7 +2,7 @@ import time
 from collections import defaultdict
 from functools import partial
 from queue import Queue
-from QChat.core import QChatCore, DaemonThread
+from QChat.core import QChatCore, DaemonThread, GLOBAL_SLEEP_TIME
 from QChat.cryptobox import QChatCipher
 from QChat.mailbox import QChatMailbox
 from QChat.messages import QCHTMessage, GETUMessage, PUTUMessage, PTCLMessage
@@ -26,60 +26,25 @@ class QChatClient(QChatCore):
         # Start our inbound/outbound message handlers
         self.message_sender = DaemonThread(target=self.send_outbound_messages)
 
-        self._allow_invalid_signatures = allow_invalid_signatures
-
-        super(QChatClient, self).__init__(name=name, cqcFile=cqcFile)
-
-    def process_message(self, message):
-        """
-        The primary message handling entrypoint, performs signature verification/stripping before passing the
-        message to a specific handler
-        :param message: The inbound message from the application connection
-        :return: None
-        """
-        self.logger.debug("Processing {} message from {}: {}".format(message.header,
-                                                                     message.sender,
-                                                                     message.data))
-
-        # Verify the signature on the message for key message types
-        if message.verify:
-            if not self.userDB.hasUser(message.sender):
-                self.requestUserInfo(message.sender)
-
-            message, signature = self._strip_signature(message)
-
-            if not self._allow_invalid_signatures:
-                self._verify_message(message, signature)
-            else:
-                self.logger.warning("Will not verify message signature")
-
-        # Strip unnecessary signature information should it not be necessary for the message type
-        elif message.strip:
-            message, _ = self._strip_signature(message)
-
         # Mapping of message headers to their appropriate handlers
-        proc_map = {
+        self.proc_map = {
             QCHTMessage.header: self.mailbox.storeMessage,
             GETUMessage.header: partial(self._pass_message_data, handler=self.sendUserInfo),
             PUTUMessage.header: partial(self._pass_message_data, handler=self.addUserInfo),
             PTCLMessage.header: self._follow_protocol
         }
 
-        handler = proc_map.get(message.header, self._store_control_message)
-        handler(message)
-
-        self.logger.debug("Completed processing message")
+        super(QChatClient, self).__init__(name=name, cqcFile=cqcFile)
 
     def send_outbound_messages(self):
         """
         Method for daemon thread, empties the outbound queue
         :return: None
         """
-        while True:
-            if not self.outbound_queue.empty():
+        while not time.sleep(GLOBAL_SLEEP_TIME):
+            while not self.outbound_queue.empty():
                 user, message = self.outbound_queue.get()
                 self.sendMessage(user, message)
-            time.sleep(0.005)
 
     def _follow_protocol(self, message):
         """
@@ -104,7 +69,7 @@ class QChatClient(QChatCore):
 
         # Establish a key with our peer
         if isinstance(p, QChatKeyProtocol):
-            key = p.execute() + b'\x00'*15
+            key = p.execute()
             self.userDB.changeUserInfo(message.sender, message_key=key)
 
         # Exchange a message with our peer
@@ -134,7 +99,7 @@ class QChatClient(QChatCore):
                                role=LEADER_ROLE, relay_info=self.root_config)
 
             # Execute the protocol and store the derived key in the user database
-            key = p.execute() + b'\x00'*15
+            key = p.execute()
             self.userDB.changeUserInfo(user, message_key=key)
 
         else:
@@ -150,7 +115,7 @@ class QChatClient(QChatCore):
         # Check that we have a message key established with this user and establish one if none
         user_key = self.userDB.getMessageKey(user)
         if not user_key:
-            self._establish_key(user, 1)
+            self._establish_key(user, 16)
             user_key=self.userDB.getMessageKey(user)
 
         # Encrypt the plaintext information
@@ -228,4 +193,4 @@ class QChatClient(QChatCore):
             message.decode("ISO-8859-1")
             messages[sender].append(message)
 
-        return messages
+        return dict(messages)
