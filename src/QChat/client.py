@@ -11,10 +11,11 @@ from QChat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProto
 
 
 class QChatClient(QChatCore):
-    def __init__(self, name, cqcFile=None):
+    def __init__(self, name, cqcFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
+        :param allow_invalid_signatures: process messages with faulty signatures
         """
         # Outbound message queue
         self.outbound_queue = Queue()
@@ -24,6 +25,8 @@ class QChatClient(QChatCore):
 
         # Start our inbound/outbound message handlers
         self.message_sender = DaemonThread(target=self.send_outbound_messages)
+
+        self._allow_invalid_signatures = allow_invalid_signatures
 
         super(QChatClient, self).__init__(name=name, cqcFile=cqcFile)
 
@@ -44,7 +47,11 @@ class QChatClient(QChatCore):
                 self.requestUserInfo(message.sender)
 
             message, signature = self._strip_signature(message)
-            self._verify_message(message, signature)
+
+            if not self._allow_invalid_signatures:
+                self._verify_message(message, signature)
+            else:
+                self.logger.warning("Will not verify message signature")
 
         # Strip unnecessary signature information should it not be necessary for the message type
         elif message.strip:
