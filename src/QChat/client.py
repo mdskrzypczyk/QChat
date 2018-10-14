@@ -11,7 +11,7 @@ from QChat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProto
 
 
 class QChatClient(QChatCore):
-    def __init__(self, name, cqcFile=None, allow_invalid_signatures=False):
+    def __init__(self, name, configFile=None, cqcFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
@@ -34,7 +34,8 @@ class QChatClient(QChatCore):
             PTCLMessage.header: self._follow_protocol
         }
 
-        super(QChatClient, self).__init__(name=name, cqcFile=cqcFile)
+        super(QChatClient, self).__init__(name=name, configFile=configFile, cqcFile=cqcFile,
+                                          allow_invalid_signatures=allow_invalid_signatures)
 
     def send_outbound_messages(self):
         """

@@ -5,7 +5,7 @@ from QChat.core import QChatCore, DaemonThread
 
 
 class QChatServer(QChatCore):
-    def __init__(self, name, cqcFile=None):
+    def __init__(self, name, configFile=None, cqcFile=None, allow_invalid_signatures):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
@@ -19,7 +19,8 @@ class QChatServer(QChatCore):
             RQQBMessage.header: self._distribute_qubits
         }
 
-        super(QChatServer, self).__init__(name=name, cqcFile=cqcFile)
+        super(QChatServer, self).__init__(name=name, configFile=configFile, cqcFile=cqcFile,
+                                          allow_invalid_signatures=allow_invalid_signatures)
 
     def _distribute_qubits(self, message):
         """

@@ -21,13 +21,14 @@ class DaemonThread(threading.Thread):
 
 
 class QChatCore:
-    def __init__(self, name, cqcFile=None):
+    def __init__(self, name, configFile=None, cqcFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
         """
         self.name=name
         self.logger = QChatLogger(__name__)
+        self.configFile = configFile
 
         # This is the server's personal config
         self.config = self._load_server_config(self.name)
@@ -37,6 +38,8 @@ class QChatCore:
 
         # RSA Signer for handling unauthenticated classical channels
         self.signer = QChatSigner()
+
+        self._allow_invalid_signatures = allow_invalid_signatures
 
         # Connection to other applications
         self.connection = QChatConnection(name=name, config=self.config, cqcFile=cqcFile)
@@ -65,8 +68,13 @@ class QChatCore:
         :param name:
         :return:
         """
-        path = os.path.abspath(__file__)
-        config_path = os.path.dirname(path) + "/config.json"
+        if self.configFile:
+            config_path = self.configFile
+
+        else:
+            path = os.path.abspath(__file__)
+            config_path = os.path.dirname(path) + "/config.json"
+
         self.logger.debug("Loading server config for {}".format(name))
 
         with open(config_path) as f:
@@ -130,7 +138,10 @@ class QChatCore:
                 self.requestUserInfo(message.sender)
 
             message, signature = self._strip_signature(message)
-            self._verify_message(message, signature)
+            if not self._allow_invalid_signatures:
+                self._verify_message(message, signature)
+            else:
+                self.logger.warning("Will not verify message signature")
 
         # Strip unnecessary signature information should it not be necessary for the message type
         elif message.strip:
