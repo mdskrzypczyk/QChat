@@ -9,7 +9,7 @@ LEADER_ROLE = 0
 FOLLOW_ROLE = 1
 IDLE_TIMEOUT = 60
 BYTE_LEN = 8
-ROUND_SIZE = 100
+ROUND_SIZE = 20
 PCHSH = 0.8535533905932737
 MAX_GOLAY_ERROR = 0.13043478260869565
 
@@ -253,7 +253,12 @@ class BB84_Purified(QChatKeyProtocol):
         if not r.data["fin"]:
             raise ProtocolException("Error coordinating error estimation")
 
-        return (num_error / len(test_bits))
+        if test_bits:
+            error = (num_error / len(test_bits))
+        else:
+            error = 1
+
+        return error
 
     def _reconcile_information(self, x, ecc=ECC_Golay()):
         """
@@ -351,7 +356,7 @@ class BB84_Purified(QChatKeyProtocol):
 
         # Abort the protocol if we have to high of an error rate to reconcile information with
         if error_rate >= MAX_GOLAY_ERROR:
-            raise RuntimeError("Error rate of {}, aborting protocol".format(error_rate))
+            return []
 
         # Return the secret data
         return x_remain

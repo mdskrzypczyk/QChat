@@ -2,7 +2,7 @@ from QChat.client import QChatClient
 import time
 
 # Sleep for 10 seconds to allow Bob to spin up first
-time.sleep(10)
+time.sleep(4)
 
 # Instantiate the server and sleep for 2 seconds to allow initialization
 c = QChatClient("Alice")

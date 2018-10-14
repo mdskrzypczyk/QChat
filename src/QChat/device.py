@@ -67,6 +67,8 @@ class FollowDevice(MeasurementDevice):
         elif basis == 1:
             q.rot_Y(16)
             return q.measure()
+        elif basis == 2:
+            return q.measure()
 
     def receiveEPR(self, timeout=60):
         """

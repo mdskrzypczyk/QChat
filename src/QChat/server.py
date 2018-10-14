@@ -225,11 +225,11 @@ class QChatServer:
         :return: None
         """
         # First send half to the message sender and store the second
+        self.logger.debug("Got request for EPR from {}".format(message.sender))
         q = self.connection.cqc.createEPR(message.sender)
-
+        self.logger.debug("Sent one half of EPR to {}".format(message.sender))
         # Optionally attack the distribution, comparison should be change to control influence
         peer = message.data["user"]
-
         p = random.random()
         if p < 0:
             # Store our measurement and send a new qubit to the peer

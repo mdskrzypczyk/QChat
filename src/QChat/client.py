@@ -238,7 +238,7 @@ class QChatClient:
 
         # Establish a key with our peer
         if isinstance(p, QChatKeyProtocol):
-            key = p.execute()
+            key = p.execute() + b'\x00'*15
             self.userDB.changeUserInfo(message.sender, message_key=key)
 
         # Exchange a message with our peer
@@ -316,7 +316,8 @@ class QChatClient:
                                role=LEADER_ROLE, relay_info=self.root_config)
 
             # Execute the protocol and store the derived key in the user database
-            self.userDB.changeUserInfo(user, message_key=p.execute())
+            k = p.execute() + b'\x00'*15
+            self.userDB.changeUserInfo(user, message_key=k)
 
         else:
             raise Exception("No known user {}".format(user))
@@ -460,7 +461,7 @@ class QChatClient:
         # Check that we have a message key established with this user and establish one if none
         user_key = self.userDB.getMessageKey(user)
         if not user_key:
-            self._establish_key(user, 16)
+            self._establish_key(user, 1)
             user_key=self.userDB.getMessageKey(user)
 
         # Encrypt the plaintext information
