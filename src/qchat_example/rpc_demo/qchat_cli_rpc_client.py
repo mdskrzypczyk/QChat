@@ -3,10 +3,9 @@ import argparse
 import logging
 import sys
 import time
+import threading
 
 import xmlrpc.client
-
-from threading import Thread
 
 logger = logging.getLogger("QChatCLIRPCClient")
 logger.setLevel(logging.DEBUG)
@@ -18,16 +17,19 @@ class QChatCLIRPCClient:
         self.user = user
         self.destination = destination
         self._running = False
-        self._message_reader = Thread(target=self._read_messages)
+        self._message_reader = threading.Thread(target=self._read_messages)
+        self.lock = threading.Lock()
 
     def start(self):
+        print("Hello, this is %s\n\n\n\n" % self.user)
         self._running = True
         self._message_reader.start()
 
         while self._running:
             input_text = input("[ {} ]: ".format(self.user))
             the_message = "%s @ %f" % (input_text, time.time())
-            self.client.send_message(self.user, self.destination, the_message)
+            with self.lock:
+                self.client.send_message(self.user, self.destination, the_message)
 
     def stop(self):
         logger.info("Stopping the CLI RPC Client")
@@ -37,7 +39,8 @@ class QChatCLIRPCClient:
     def _read_messages(self):
         while self._running:
             try:
-                user_messages = self.client.get_messages(self.user)
+                with self.lock:
+                    user_messages = self.client.get_messages(self.user)
                 for sender, messages in user_messages.items():
                     for message in messages:
                         print("[ {} ]: {}\n".format(sender, message))
