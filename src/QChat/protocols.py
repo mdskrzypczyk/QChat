@@ -72,11 +72,16 @@ class QChatProtocol:
         """
         # Wait for a message
         wait_start = time.time()
-        while not self.ctrl_msg_q:
+        while True:
             curr_time = time.time()
-
             if curr_time - wait_start > idle_timeout:
                 raise ProtocolException("Timed out waiting for control message")
+
+            if self.ctrl_msg_q:
+                break
+
+            else:
+                time.sleep(0.005)
 
         # Grab the newest message
         message = self.ctrl_msg_q.pop(0)

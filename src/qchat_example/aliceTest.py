@@ -13,7 +13,7 @@ c.sendQChatMessage("Bob", "Hello!")
 
 # Spin to keep the server alive
 while True:
-    messages = c.getMessageHistory("Alice")
+    messages = c.getMessageHistory()
     if messages:
         print("Got messages!: {}".format(messages))
         break
