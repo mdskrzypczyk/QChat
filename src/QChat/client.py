@@ -25,7 +25,7 @@ class DaemonThread(threading.Thread):
 
 
 class QChatClient:
-    def __init__(self, name):
+    def __init__(self, name, cqcFilePath=None):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
@@ -40,7 +40,7 @@ class QChatClient:
         self.root_config = self._load_server_config(self.config.get("root"))
 
         # Connection to other applications
-        self.connection = QChatConnection(name=name, config=self.config)
+        self.connection = QChatConnection(name=name, config=self.config, cqcFilePath=cqcFilePath)
 
         # Inbound control messages for protocols
         self.control_message_queue = defaultdict(list)
@@ -159,11 +159,9 @@ class QChatClient:
         # Mapping of message headers to their appropriate handlers
         proc_map = {
             QCHTMessage.header: self.mailbox.storeMessage,
-            RGSTMessage.header: partial(self._pass_message_data, handler=self.registerUser),
             GETUMessage.header: partial(self._pass_message_data, handler=self.sendUserInfo),
             PUTUMessage.header: partial(self._pass_message_data, handler=self.addUserInfo),
-            PTCLMessage.header: self._follow_protocol,
-            RQQBMessage.header: self._distribute_qubits
+            PTCLMessage.header: self._follow_protocol
         }
 
         handler = proc_map.get(message.header, self._store_control_message)
@@ -238,37 +236,14 @@ class QChatClient:
 
         # Establish a key with our peer
         if isinstance(p, QChatKeyProtocol):
-            key = p.execute() + b'\x00'*15
+            # key = p.execute()
+            key = b'\x00'*16
             self.userDB.changeUserInfo(message.sender, message_key=key)
 
         # Exchange a message with our peer
         elif isinstance(p, QChatMessageProtocol):
             self.logger.debug("Received SuperDense coded message from {}: {}".format(message.sender,
                                                                                      p.receive_message()))
-
-    def _distribute_qubits(self, message):
-        """
-        Internal method that allows the server to act as an EPR source.  For use in modeling the Purified BB84
-        protocol
-        :param message: Message containing user information for EPR distribution
-        :return: None
-        """
-        # First send half to the message sender and store the second
-        q = self.connection.cqc.createEPR(message.sender)
-
-        # Optionally attack the distribution, comparison should be change to control influence
-        peer = message.data["user"]
-
-        p = random.random()
-        if p < 0:
-            # Store our measurement and send a new qubit to the peer
-            outcome = q.measure()
-            self.qubit_history[peer].append(outcome)
-            q = qubit(self.connection.cqc)
-
-        # Send other half to peer
-        self.connection.cqc.sendQubit(q, peer)
-        self.logger.info("Shared qubits between {} and {}".format(message.sender, peer))
 
     def _store_control_message(self, message):
         """
@@ -316,8 +291,9 @@ class QChatClient:
                                role=LEADER_ROLE, relay_info=self.root_config)
 
             # Execute the protocol and store the derived key in the user database
-            k = p.execute() + b'\x00'*15
-            self.userDB.changeUserInfo(user, message_key=k)
+            # key = p.execute()
+            key = b'\x00'*16
+            self.userDB.changeUserInfo(user, message_key=key)
 
         else:
             raise Exception("No known user {}".format(user))
@@ -337,22 +313,16 @@ class QChatClient:
         :param kwargs: The key=value pairs we want to store in the database
         :return: None
         """
-        self.logger.debug("Adding to user {} info {}".format(user, kwargs))
-        self.userDB.addUser(user, **kwargs)
+        if user == "*":
+            self.logger.debug("Get bulk user info!")
+            for info in kwargs["info"]:
+                user_name = info.pop("user")
+                self.logger.debug("Adding to user {} info {}".format(user_name, info))
+                self.userDB.addUser(user, **info)
 
-    def registerUser(self, user, connection, pub):
-        """
-        Registers a new user to our server
-        :param user: The user being registered
-        :param connection: Connection (host/port) information of the user
-        :param pub: The RSA public key of the user for authentication
-        :return: None
-        """
-        if self.userDB.hasUser(user):
-            raise Exception("User {} already registered".format(user))
         else:
-            self.addUserInfo(user, pub=pub.encode("ISO-8859-1"), connection=connection)
-            self.logger.info("Registered new contact {}".format(user))
+            self.logger.debug("Adding to user {} info {}".format(user, kwargs))
+            self.userDB.addUser(user, **kwargs)
 
     def getPublicInfo(self, user):
         """
@@ -362,8 +332,6 @@ class QChatClient:
         :return: A dictionary containing the user's name, host/port info, and public key
         """
         pub_info = dict(self.userDB.getPublicUserInfo(user))
-        pub_info["pub"] = pub_info["pub"].decode("ISO-8859-1")
-        pub_info["user"] = user
         return pub_info
 
     def getPublicKey(self):
@@ -461,7 +429,7 @@ class QChatClient:
         # Check that we have a message key established with this user and establish one if none
         user_key = self.userDB.getMessageKey(user)
         if not user_key:
-            self._establish_key(user, 1)
+            self._establish_key(user, 16)
             user_key=self.userDB.getMessageKey(user)
 
         # Encrypt the plaintext information
@@ -525,23 +493,18 @@ class QChatClient:
         :param user: The user to get message history for
         :return: A list of decrypted messages that we have received from the user
         """
-        messages = []
-        user_key = self.userDB.getMessageKey(user)
-        for _, qm in enumerate(self.mailbox.getMessages(user)):
-            # Error if someone else's message somehow got into this list
-            if qm.sender != user:
-                raise Exception("Mailbox for {} contained message from {}".format(user, qm.sender))
+        messages = defaultdict(list)
+        for _, qm in enumerate(self.mailbox.popMessages()):
+            sender = qm.sender
+            user_key = self.userDB.getMessageKey(sender)
+            # Obtain cipher data
+            nonce = qm.data['nonce'].encode("ISO-8859-1")
+            ciphertext = qm.data['ciphertext'].encode("ISO-8859-1")
+            tag = qm.data['tag'].encode("ISO-8859-1")
 
-            else:
-                # Obtain cipher data
-                nonce = qm.data['nonce'].encode("ISO-8859-1")
-                ciphertext = qm.data['ciphertext'].encode("ISO-8859-1")
-                tag = qm.data['tag'].encode("ISO-8859-1")
-
-                # Decrypt the essage
-                message = QChatCipher(user_key).decrypt((nonce, ciphertext, tag))
-                message.decode("ISO-8859-1")
-
-                messages.append(message)
+            # Decrypt the essage
+            message = QChatCipher(user_key).decrypt((nonce, ciphertext, tag))
+            message.decode("ISO-8859-1")
+            messages[sender].append(message)
 
         return messages

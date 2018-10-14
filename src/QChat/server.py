@@ -22,7 +22,7 @@ class DaemonThread(threading.Thread):
 
 
 class QChatServer:
-    def __init__(self, name):
+    def __init__(self, name, cqcFilePath=None):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
@@ -37,7 +37,7 @@ class QChatServer:
         self.root_config = self._load_server_config(self.config.get("root"))
 
         # Connection to other applications
-        self.connection = QChatConnection(name=name, config=self.config)
+        self.connection = QChatConnection(name=name, config=self.config, cqcFilePath=cqcFilePath)
 
         # Inbound control messages for protocols
         self.control_message_queue = defaultdict(list)
@@ -256,8 +256,16 @@ class QChatServer:
         :param kwargs: The key=value pairs we want to store in the database
         :return: None
         """
-        self.logger.debug("Adding to user {} info {}".format(user, kwargs))
-        self.userDB.addUser(user, **kwargs)
+        if user == "*":
+            self.logger.debug("Get bulk user info!")
+            for info in kwargs["info"]:
+                user_name = info.pop("user")
+                self.logger.debug("Adding to user {} info {}".format(user_name, info))
+                self.userDB.addUser(user, **info)
+
+        else:
+            self.logger.debug("Adding to user {} info {}".format(user, kwargs))
+            self.userDB.addUser(user, **kwargs)
 
     def registerUser(self, user, connection, pub):
         """
@@ -281,8 +289,6 @@ class QChatServer:
         :return: A dictionary containing the user's name, host/port info, and public key
         """
         pub_info = dict(self.userDB.getPublicUserInfo(user))
-        pub_info["pub"] = pub_info["pub"].decode("ISO-8859-1")
-        pub_info["user"] = user
         return pub_info
 
     def getPublicKey(self):

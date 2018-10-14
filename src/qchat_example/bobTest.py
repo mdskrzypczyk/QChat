@@ -9,9 +9,11 @@ s = QChatClient("Bob")
 
 # Spin to keep the server alive
 while True:
-    print(s.mailbox.messages)
-    try:
-        print("Got messages!: {}".format(s.getMessageHistory("Alice")))
-    except:
-        pass
+    messages = s.getMessageHistory("Bob")
+    if messages:
+        print("Got messages!: {}".format(messages))
+        break
     time.sleep(10)
+
+s.requestUserInfo('*')
+time.sleep(5)

@@ -10,3 +10,6 @@ time.sleep(2)
 
 # Send a message to Bob
 c.sendQChatMessage("Bob", "Hello!")
+
+while True:
+    pass

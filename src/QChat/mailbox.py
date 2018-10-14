@@ -9,15 +9,22 @@ class QChatMailbox:
     """
     def __init__(self):
         self.lock = threading.Lock()
-        self.messages = defaultdict(list)
+        self.messages = []
         self.logger = QChatLogger(__name__)
 
     def storeMessage(self, message):
         self.logger.info("New message in mailbox from {}".format(message.sender))
         with self.lock:
-            self.messages[message.sender].append(message)
+            self.messages.append(message)
 
-    def getMessages(self, user):
-        self.logger.info("Retrieving messages for {}".format(user))
+    def getMessages(self):
+        self.logger.info("Retrieving messages")
         with self.lock:
-            return list(self.messages[user])
+            return list(self.messages)
+
+    def popMessages(self):
+        self.logger.info("Popping messages")
+        with self.lock:
+            messages = list(self.messages)
+            self.messages = []
+            return messages
