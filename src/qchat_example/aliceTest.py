@@ -11,5 +11,10 @@ time.sleep(2)
 # Send a message to Bob
 c.sendQChatMessage("Bob", "Hello!")
 
+# Spin to keep the server alive
 while True:
-    pass
+    messages = c.getMessageHistory("Alice")
+    if messages:
+        print("Got messages!: {}".format(messages))
+        break
+    time.sleep(10)

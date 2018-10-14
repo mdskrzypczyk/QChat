@@ -5,15 +5,17 @@ from QChat.client import QChatClient
 time.sleep(2)
 
 # Set up the server
-s = QChatClient("Bob")
+c = QChatClient("Bob")
 
 # Spin to keep the server alive
 while True:
-    messages = s.getMessageHistory("Bob")
+    messages = c.getMessageHistory("Bob")
     if messages:
         print("Got messages!: {}".format(messages))
         break
     time.sleep(10)
 
-s.requestUserInfo('*')
-time.sleep(5)
+c.sendQChatMessage("Alice", "Hello to you!")
+
+while True:
+    time.sleep(10)
