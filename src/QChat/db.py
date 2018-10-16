@@ -62,8 +62,28 @@ class UserDB:
         self.db[user].update(kwargs)
 
     def getPublicUserInfo(self, user):
-        public_info = {
-            "connection": self.getConnectionInfo(user),
-            "pub": self.getPublicKey(user)
-        }
+        if user == "*":
+            public_info = []
+            for user in self.db:
+                info = {
+                    "connection": self.getConnectionInfo(user),
+                    "pub": self.getPublicKey(user)
+                }
+
+                info["pub"] = info["pub"].decode("ISO-8859-1")
+                info["user"] = user
+
+                public_info.append(info)
+
+            public_info = {"user": "*", "info": public_info}
+
+        else:
+            public_info = {
+                "connection": self.getConnectionInfo(user),
+                "pub": self.getPublicKey(user)
+            }
+
+            public_info["pub"] = public_info["pub"].decode("ISO-8859-1")
+            public_info["user"] = user
+
         return public_info

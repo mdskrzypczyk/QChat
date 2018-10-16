@@ -31,6 +31,5 @@ between two users using AES-GCM to guarantee authenticity and
  by initializing the nodes for the Simulaqron network and running
  the examples provided in the src directory.
  
- NOTE: The examples take a long amount of time due to the amount of
- RSA authenticated control messages used in the BB84 protocols.
- 
+ # RPC
+ There is a basic XML-RPC Server and Client located within the qchat example directory now.

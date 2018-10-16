@@ -72,11 +72,16 @@ class QChatProtocol:
         """
         # Wait for a message
         wait_start = time.time()
-        while not self.ctrl_msg_q:
+        while True:
             curr_time = time.time()
-
             if curr_time - wait_start > idle_timeout:
                 raise ProtocolException("Timed out waiting for control message")
+
+            if self.ctrl_msg_q:
+                break
+
+            else:
+                time.sleep(0.005)
 
         # Grab the newest message
         message = self.ctrl_msg_q.pop(0)
@@ -158,10 +163,13 @@ class BB84_Purified(QChatKeyProtocol):
         while len(x) < ROUND_SIZE:
             # Request our EPR source to distribute the pairs
             if self.role == LEADER_ROLE:
+                self.logger.debug("Requesting EPR pair with {}".format(self.peer_info["user"]))
                 self.device.requestEPR(self.peer_info["user"])
 
             # Receive our half of the EPR pair
+            self.logger.debug("Trying to receive EPR pair")
             q = self.device.receiveEPR()
+            self.logger.debug("Successfully received!")
 
             # Randomly measure in Hadamard/Standard basis
             basisflip = random.randint(0, 1)
@@ -250,7 +258,12 @@ class BB84_Purified(QChatKeyProtocol):
         if not r.data["fin"]:
             raise ProtocolException("Error coordinating error estimation")
 
-        return (num_error / len(test_bits))
+        if test_bits:
+            error = (num_error / len(test_bits))
+        else:
+            error = 1
+
+        return error
 
     def _reconcile_information(self, x, ecc=ECC_Golay()):
         """
@@ -348,7 +361,7 @@ class BB84_Purified(QChatKeyProtocol):
 
         # Abort the protocol if we have to high of an error rate to reconcile information with
         if error_rate >= MAX_GOLAY_ERROR:
-            raise RuntimeError("Error rate of {}, aborting protocol".format(error_rate))
+            return []
 
         # Return the secret data
         return x_remain
