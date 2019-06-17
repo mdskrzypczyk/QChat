@@ -21,7 +21,7 @@ class DaemonThread(threading.Thread):
 
 
 class QChatCore:
-    def __init__(self, name, configFile=None, cqcFile=None, allow_invalid_signatures=False):
+    def __init__(self, name, configFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
@@ -42,7 +42,7 @@ class QChatCore:
         self._allow_invalid_signatures = allow_invalid_signatures
 
         # Connection to other applications
-        self.connection = QChatConnection(name=name, config=self.config, cqcFile=cqcFile)
+        self.connection = QChatConnection(name=name, config=self.config)
 
         # Storage of user/network information
         self.userDB = UserDB()
