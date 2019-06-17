@@ -1,14 +1,13 @@
 import logging
-import sys
 
 LOG_LEVEL = logging.DEBUG
 FORMAT = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
-logging.basicConfig(format=FORMAT, level=LOG_LEVEL)
 
 
 class QChatLogger:
     def __init__(self, name):
         self.logger = logging.getLogger(name)
+        self.logger.setLevel(LOG_LEVEL)
 
     def warning(self, message):
         self.logger.warning(message)

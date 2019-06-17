@@ -5,15 +5,15 @@ import time
 time.sleep(4)
 
 # Instantiate the server and sleep for 2 seconds to allow initialization
-c = QChatClient("Alice")
+client = QChatClient("Alice")
 time.sleep(2)
 
 # Send a message to Bob
-c.sendQChatMessage("Bob", "Hello!")
+client.sendQChatMessage("Bob", "Hello!")
 
 # Spin to keep the server alive
 while True:
-    messages = c.getMessageHistory()
+    messages = client.getMessageHistory()
     if messages:
         print("Got messages!: {}".format(messages))
         break

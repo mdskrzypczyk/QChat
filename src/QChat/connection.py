@@ -2,7 +2,7 @@ import socket
 import threading
 from QChat.log import QChatLogger
 from QChat.messages import HEADER_LENGTH, PAYLOAD_SIZE, MAX_SENDER_LENGTH, MessageFactory
-from SimulaQron.cqc.pythonLib.cqc import *
+from cqc.pythonLib import CQCConnection
 
 
 class ConnectionError(Exception):
@@ -20,7 +20,7 @@ class DaemonThread(threading.Thread):
 
 
 class QChatConnection:
-    def __init__(self, name, config, cqcFile=None):
+    def __init__(self, name, config):
         """
         Initialize a connection to the CQC server and
         :param name:   Name of the host (Must be one available by SimulaQron CQC)
@@ -35,7 +35,7 @@ class QChatConnection:
         # CQC and listening socket
         self.cqc = None
         self.listening_socket = None
-        self.cqc = CQCConnection(name=name, cqcFile=cqcFile)
+        self.cqc = CQCConnection(name=name)
 
         # Host name the connection belongs to
         self.name = name
