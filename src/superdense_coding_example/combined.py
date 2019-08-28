@@ -1,35 +1,36 @@
 import time
 from QChat.client import QChatClient
 from QChat.server import QChatServer
+from cqc.pythonLib import CQCConnection
 
-# Set up the root server and spin
-root = QChatServer("Eve")
+# Create Simulaqron connections for each component
+with CQCConnection(name="Alice") as cqc_alice, CQCConnection(name="Bob") as cqc_bob, \
+        CQCConnection(name="Eve") as cqc_eve:
 
-# Set up the server
-time.sleep(2)
-alice_client = QChatClient("Alice")
+    # Start up root server
+    root = QChatServer(name="Eve", cqc_connection=cqc_eve)
+    time.sleep(2)
 
-# Sleep for 4 seconds
-time.sleep(2)
+    # Start up users
+    alice_client = QChatClient(name="Alice", cqc_connection=cqc_alice)
+    bob_client = QChatClient("Bob", cqc_connection=cqc_bob)
+    time.sleep(2)
 
-# Set up the server
-bob_client = QChatClient("Bob")
-time.sleep(2)
+    # Send a superdense coded message
+    alice_client.sendSuperDenseMessage("Bob", "Hello!")
 
-# Send a superdense coded message
-alice_client.sendSuperDenseMessage("Bob", "Hello!")
+    while True:
+        messages = bob_client.getMessageHistory()
+        if messages:
+            print("Got messages!: {}".format(messages))
+            break
+        time.sleep(1)
 
-while True:
-    messages = bob_client.getMessageHistory()
-    if messages:
-        print("Got messages!: {}".format(messages))
-        break
-    time.sleep(1)
+    bob_client.sendSuperDenseMessage("Alice", "Hello to you too!")
 
-bob_client.sendSuperDenseMessage("Alice", "Hello to you too!")
-while True:
-    messages = alice_client.getMessageHistory()
-    if messages:
-        print("Got messages!: {}".format(messages))
-        break
-    time.sleep(1)
+    while True:
+        messages = alice_client.getMessageHistory()
+        if messages:
+            print("Got messages!: {}".format(messages))
+            break
+        time.sleep(1)

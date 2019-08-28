@@ -13,17 +13,17 @@ class QChatMailbox:
         self.logger = QChatLogger(__name__)
 
     def storeMessage(self, message):
-        self.logger.info("New message in mailbox from {}".format(message.sender))
+        self.logger.debug("New message in mailbox from {}".format(message.sender))
         with self.lock:
             self.messages.append(message)
 
     def getMessages(self):
-        self.logger.info("Retrieving messages")
+        self.logger.debug("Retrieving messages")
         with self.lock:
             return list(self.messages)
 
     def popMessages(self):
-        self.logger.info("Popping messages")
+        self.logger.debug("Popping messages")
         with self.lock:
             messages = list(self.messages)
             self.messages = []
