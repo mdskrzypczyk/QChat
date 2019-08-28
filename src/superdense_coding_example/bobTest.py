@@ -1,10 +1,14 @@
 import time
-from QChat.server import QChatServer
+from QChat.client import QChatClient
 
 # Sleep for 4 seconds
 time.sleep(4)
 
 # Set up Bob and spin
-s = QChatServer("Bob")
+client = QChatClient("Bob")
 while True:
-    pass
+    messages = client.getMessageHistory()
+    if messages:
+        print("Got messages!: {}".format(messages))
+        break
+    time.sleep(10)

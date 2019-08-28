@@ -5,7 +5,7 @@ from queue import Queue
 from QChat.core import QChatCore, DaemonThread, GLOBAL_SLEEP_TIME
 from QChat.cryptobox import QChatCipher
 from QChat.mailbox import QChatMailbox
-from QChat.messages import QCHTMessage, GETUMessage, PUTUMessage, PTCLMessage
+from QChat.messages import QCHTMessage, SPDSMessage, GETUMessage, PUTUMessage, PTCLMessage
 from QChat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProtocol, BB84_Purified, \
                             DIQKD, SuperDenseCoding, LEADER_ROLE, FOLLOW_ROLE
 
@@ -75,8 +75,12 @@ class QChatClient(QChatCore):
 
         # Exchange a message with our peer
         elif isinstance(p, QChatMessageProtocol):
-            self.logger.debug("Received SuperDense coded message from {}: {}".format(message.sender,
-                                                                                     p.receive_message()))
+            received_message = p.receive_message()
+            received_data = {
+                "plaintext": received_message
+            }
+            mailbox_message = SPDSMessage(sender=message.sender, message_data=received_data)
+            self.mailbox.storeMessage(mailbox_message)
 
     def _establish_key(self, user, key_size, protocol_class=BB84_Purified):
         """
@@ -148,7 +152,7 @@ class QChatClient(QChatCore):
         self.sendMessage(user, message)
         self.logger.info("Sent QChat message to {}".format(user))
 
-    def sendSuperdenseMessage(self, user, plaintext):
+    def sendSuperDenseMessage(self, user, plaintext):
         """
         Sends a superdense coded message to the specified user
         :param user: The user we want to send the superdense message to
@@ -183,15 +187,23 @@ class QChatClient(QChatCore):
         messages = defaultdict(list)
         for _, qm in enumerate(self.mailbox.popMessages()):
             sender = qm.sender
-            user_key = self.userDB.getMessageKey(sender)
-            # Obtain cipher data
-            nonce = qm.data['nonce'].encode("ISO-8859-1")
-            ciphertext = qm.data['ciphertext'].encode("ISO-8859-1")
-            tag = qm.data['tag'].encode("ISO-8859-1")
+            if qm.header == QCHTMessage.header:
+                user_key = self.userDB.getMessageKey(sender)
+                # Obtain cipher data
+                nonce = qm.data['nonce'].encode("ISO-8859-1")
+                ciphertext = qm.data['ciphertext'].encode("ISO-8859-1")
+                tag = qm.data['tag'].encode("ISO-8859-1")
 
-            # Decrypt the essage
-            message = QChatCipher(user_key).decrypt((nonce, ciphertext, tag))
-            message.decode("ISO-8859-1")
+                # Decrypt the essage
+                message = QChatCipher(user_key).decrypt((nonce, ciphertext, tag))
+                message.decode("ISO-8859-1")
+
+            elif qm.header == SPDSMessage.header:
+                message = qm.data['plaintext']
+
+            else:
+                raise Exception("Got malformed message from mailbox: {}".format(qm))
+
             messages[sender].append(message)
 
         return dict(messages)
