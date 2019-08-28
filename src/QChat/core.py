@@ -21,12 +21,12 @@ class DaemonThread(threading.Thread):
 
 
 class QChatCore:
-    def __init__(self, name, configFile=None, allow_invalid_signatures=False):
+    def __init__(self, name, cqc_connection, configFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
         """
-        self.name=name
+        self.name = name
         self.logger = QChatLogger(__name__)
         self.configFile = configFile
 
@@ -42,7 +42,7 @@ class QChatCore:
         self._allow_invalid_signatures = allow_invalid_signatures
 
         # Connection to other applications
-        self.connection = QChatConnection(name=name, config=self.config)
+        self.connection = QChatConnection(name=name, cqc_connection=cqc_connection, config=self.config)
 
         # Storage of user/network information
         self.userDB = UserDB()
@@ -97,8 +97,8 @@ class QChatCore:
             if self.config["host"] == root_host and self.config["port"] == root_port:
                 self.logger.debug("Am root server")
             else:
-                self.logger.debug("Sending registration to {}:{}".format(root_host, root_port))
                 self.sendRegistration(host=root_host, port=root_port)
+
         except:
             self.logger.info("Failed to register with root server, is it running?")
 
@@ -283,7 +283,7 @@ class QChatCore:
         """
         message = RGSTMessage(sender=self.name, message_data=self._get_registration_data())
         self.connection.send_message(host, port, message.encode_message())
-        self.logger.info("Sent registration to {}:{}".format(host, port))
+        self.logger.debug("Sent registration to {}:{}".format(host, port))
 
     def requestUserInfo(self, user):
         """

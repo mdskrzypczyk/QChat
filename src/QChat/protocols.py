@@ -371,6 +371,7 @@ class BB84_Purified(QChatKeyProtocol):
         A wrapper for the entire key derivation protocol
         :return: Derived key of byte length key_size
         """
+        self.logger.info("Beginning protocol {}".format(self.name))
         key = b''
         secret_bits = []
         reconciled = []
@@ -398,6 +399,7 @@ class BB84_Purified(QChatKeyProtocol):
             # Extract randomness from our reconciled information
             key += self._amplify_privacy(reconciled_bytes)
             self.logger.debug(key)
+            self.logger.info("Generated {} of {} bytes".format(len(key), self.key_size))
 
         self.logger.debug("Derived key {}".format(key))
         self._end_protocol()
@@ -554,6 +556,8 @@ class DIQKD(BB84_Purified):
         A wrapper for the entire key derivation protocol
         :return: Derived key of byte length key_size
         """
+        self.logger.info("Beginning protocol {}".format(self.name))
+
         key = b''
         secret_bits = []
         reconciled = []
@@ -581,6 +585,7 @@ class DIQKD(BB84_Purified):
             # Extract randomness from our reconciled information
             key += self._amplify_privacy(reconciled_bytes)
             self.logger.debug(key)
+            self.logger.info("Generated {} of {} bytes".format(len(key), self.key_size))
 
         self.logger.debug("Derived key {}".format(key))
         self._end_protocol()
@@ -630,6 +635,8 @@ class SuperDenseCoding(QChatMessageProtocol):
         :param message: A bytestring representing the data to send
         :return: None
         """
+        self.logger.info("Beginning protocol {}".format(self.name))
+
         # Grab our peer's cqc host name
         user = self.peer_info["user"]
         m = self.exchange_messages(message_data={"message_length": len(message)}, message_type=self.message_type)
@@ -674,6 +681,8 @@ class SuperDenseCoding(QChatMessageProtocol):
         self._end_protocol()
 
     def receive_message(self):
+        self.logger.info("Beginning protocol {}".format(self.name))
+
         user = self.peer_info["user"]
 
         # Get the message length from the sender
@@ -719,7 +728,6 @@ class SuperDenseCoding(QChatMessageProtocol):
         self.logger.info("Received SuperDense message from {}: {}".format(user, message))
         self._end_protocol()
         return message
-
 
 
 class ProtocolFactory:

@@ -5,7 +5,7 @@ from QChat.core import QChatCore, DaemonThread
 
 
 class QChatServer(QChatCore):
-    def __init__(self, name, configFile=None, allow_invalid_signatures=False):
+    def __init__(self, name, cqc_connection, configFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
         :param name: Name of the host we want to be on the network
@@ -19,7 +19,7 @@ class QChatServer(QChatCore):
             RQQBMessage.header: self._distribute_qubits
         }
 
-        super(QChatServer, self).__init__(name=name, configFile=configFile,
+        super(QChatServer, self).__init__(name=name, cqc_connection=cqc_connection, configFile=configFile,
                                           allow_invalid_signatures=allow_invalid_signatures)
 
     def _distribute_qubits(self, message):
@@ -44,7 +44,8 @@ class QChatServer(QChatCore):
 
         # Send other half to peer
         self.connection.cqc.sendQubit(q, peer)
-        self.logger.info("Shared qubits between {} and {}".format(message.sender, peer))
+        self.logger.debug("Sent other half of EPR to {}".format(peer))
+        self.logger.debug("Shared qubits between {} and {}".format(message.sender, peer))
 
     def registerUser(self, user, connection, pub):
         """
@@ -58,4 +59,4 @@ class QChatServer(QChatCore):
             raise Exception("User {} already registered".format(user))
         else:
             self.addUserInfo(user, pub=pub.encode("ISO-8859-1"), connection=connection)
-            self.logger.info("Registered new contact {}".format(user))
+            self.logger.info("Registered new user {}".format(user))
