@@ -716,7 +716,7 @@ class SuperDenseCoding(QChatMessageProtocol):
                 self._send_control_message(message_data={"ack": True}, message_type=self.message_type)
             message += b.to_bytes(1, 'big')
 
-        self.logger.info("Received superdense message from {}: {}".format(user, message))
+        self.logger.info("Received SuperDense message from {}: {}".format(user, message))
         self._end_protocol()
         return message
 

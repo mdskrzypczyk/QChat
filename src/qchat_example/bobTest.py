@@ -16,6 +16,3 @@ while True:
     time.sleep(10)
 
 client.sendQChatMessage("Alice", "Hello to you!")
-
-while True:
-    time.sleep(10)
