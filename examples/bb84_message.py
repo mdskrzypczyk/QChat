@@ -1,6 +1,6 @@
 import time
-from QChat.client import QChatClient
-from QChat.server import QChatServer
+from qchat.client import QChatClient
+from qchat.server import QChatServer
 from cqc.pythonLib import CQCConnection
 
 # Create Simulaqron connections for each component

@@ -1,4 +1,4 @@
-from QChat.server import QChatServer
+from qchat.server import QChatServer
 
 
 class TestQChatServerUnit:

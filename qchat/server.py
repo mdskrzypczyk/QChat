@@ -1,7 +1,7 @@
 import random
 from functools import partial
-from QChat.messages import GETUMessage, PUTUMessage, RGSTMessage, RQQBMessage
-from QChat.core import QChatCore, DaemonThread
+from qchat.messages import GETUMessage, PUTUMessage, RGSTMessage, RQQBMessage
+from qchat.core import QChatCore, DaemonThread
 
 
 class QChatServer(QChatCore):

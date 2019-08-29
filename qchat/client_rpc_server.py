@@ -3,7 +3,7 @@ import time
 
 from xmlrpc.server import SimpleXMLRPCRequestHandler
 
-from QChat.client import QChatClient
+from qchat.client import QChatClient
 
 
 logger = logging.getLogger("QChatClientRPCServer")

@@ -1,6 +1,6 @@
 import pytest
 import json
-from QChat.messages import MalformedMessage, Message, RGSTMessage, AUTHMessage, QCHTMessage, MessageFactory
+from qchat.messages import MalformedMessage, Message, RGSTMessage, AUTHMessage, QCHTMessage, MessageFactory
 
 
 class TestMessage:

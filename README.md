@@ -1,6 +1,6 @@
 # QChat
 QChat is a simple distributed encrypted chat platform built
-on Simulaqron that enables users to derive shared keys with
+on SimulaQron that enables users to derive shared keys with
 their peers using the purified BB84 protocol in the presence 
 of an unauthenticated classical channel. The key derivation
 protocol includes error correction utilizing Golay linear
@@ -18,18 +18,16 @@ between two users using AES-GCM to guarantee authenticity and
  requirements.txt file using:
  
     pip install -r requirements.txt
-    
- This project additionally requires [Simulaqron](https://github.com/StephanieWehner/SimulaQron),
- after setting up the Simulaqron project ensure that the Simulaqron
- folder is either within the src directory for QChat or perform
- the following:
- 
-    export PYTHONPATH=$PYTHONPATH:/path/to/dir/containing/Simulaqron
+
+ You can then export the path to the qchat source directory with:
+
+    export PYTHONPATH=$PYTHONPATH:/path/to/qchat
     
  # Getting Started
  After setting up the project you can test that everything is working
- by initializing the nodes for the Simulaqron network and running
- the examples provided in the src directory.
+ by initializing the nodes for the SimulaQron network and running
+ the examples provided.  See the SimulaQron documentation for further
+ details in starting nodes.
  
  # RPC
  There is a basic XML-RPC Server and Client located within the qchat example directory now.
