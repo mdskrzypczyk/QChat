@@ -1,6 +1,6 @@
 import time
-from QChat.client import QChatClient
-from QChat.server import QChatServer
+from qchat.client import QChatClient
+from qchat.server import QChatServer
 from cqc.pythonLib import CQCConnection
 
 # Create Simulaqron connections for each component
@@ -16,8 +16,8 @@ with CQCConnection(name="Alice") as cqc_alice, CQCConnection(name="Bob") as cqc_
     bob_client = QChatClient("Bob", cqc_connection=cqc_bob)
     time.sleep(2)
 
-    # Send a message to Bob
-    alice_client.sendQChatMessage("Bob", "Hello!")
+    # Send a superdense coded message
+    alice_client.sendSuperDenseMessage("Bob", "Hello!")
 
     while True:
         messages = bob_client.getMessageHistory()
@@ -26,9 +26,8 @@ with CQCConnection(name="Alice") as cqc_alice, CQCConnection(name="Bob") as cqc_
             break
         time.sleep(1)
 
-    bob_client.sendQChatMessage("Alice", "Hello to you!")
+    bob_client.sendSuperDenseMessage("Alice", "Hello to you too!")
 
-    # Spin to keep the server alive
     while True:
         messages = alice_client.getMessageHistory()
         if messages:

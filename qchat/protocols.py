@@ -1,9 +1,9 @@
 import random
 import time
-from QChat.device import LeadDevice, FollowDevice
-from QChat.ecc import ECC_Golay
-from QChat.log import QChatLogger
-from QChat.messages import PTCLMessage, BB84Message, SPDSMessage, DQKDMessage
+from qchat.device import LeadDevice, FollowDevice
+from qchat.ecc import ECC_Golay
+from qchat.log import QChatLogger
+from qchat.messages import PTCLMessage, BB84Message, SPDSMessage, DQKDMessage
 
 LEADER_ROLE = 0
 FOLLOW_ROLE = 1

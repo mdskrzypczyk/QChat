@@ -1,7 +1,7 @@
 import time
-from QChat.core import GLOBAL_SLEEP_TIME
-from QChat.messages import RQQBMessage
-from QChat.log import QChatLogger
+from qchat.core import GLOBAL_SLEEP_TIME
+from qchat.messages import RQQBMessage
+from qchat.log import QChatLogger
 
 class MeasurementDevice:
     def __init__(self, connection, relay_info):

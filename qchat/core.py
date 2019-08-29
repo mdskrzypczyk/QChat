@@ -3,11 +3,11 @@ import time
 import json
 import os
 from collections import defaultdict
-from QChat.connection import QChatConnection
-from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
-from QChat.db import UserDB
-from QChat.log import QChatLogger
-from QChat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
+from qchat.connection import QChatConnection
+from qchat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
+from qchat.db import UserDB
+from qchat.log import QChatLogger
+from qchat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
 
 GLOBAL_SLEEP_TIME = 0.001
 

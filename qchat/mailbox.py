@@ -1,6 +1,6 @@
 import threading
 from collections import defaultdict
-from QChat.log import QChatLogger
+from qchat.log import QChatLogger
 
 
 class QChatMailbox:

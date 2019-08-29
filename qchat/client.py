@@ -2,11 +2,11 @@ import time
 from collections import defaultdict
 from functools import partial
 from queue import Queue
-from QChat.core import QChatCore, DaemonThread, GLOBAL_SLEEP_TIME
-from QChat.cryptobox import QChatCipher
-from QChat.mailbox import QChatMailbox
-from QChat.messages import QCHTMessage, SPDSMessage, GETUMessage, PUTUMessage, PTCLMessage
-from QChat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProtocol, BB84_Purified, \
+from qchat.core import QChatCore, DaemonThread, GLOBAL_SLEEP_TIME
+from qchat.cryptobox import QChatCipher
+from qchat.mailbox import QChatMailbox
+from qchat.messages import QCHTMessage, SPDSMessage, GETUMessage, PUTUMessage, PTCLMessage
+from qchat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProtocol, BB84_Purified, \
                             DIQKD, SuperDenseCoding, LEADER_ROLE, FOLLOW_ROLE
 
 

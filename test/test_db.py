@@ -1,4 +1,4 @@
-from QChat.db import UserDB
+from qchat.db import UserDB
 
 
 class TestUserDB:

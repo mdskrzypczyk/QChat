@@ -1,7 +1,7 @@
 import socket
 import threading
-from QChat.log import QChatLogger
-from QChat.messages import HEADER_LENGTH, PAYLOAD_SIZE, MAX_SENDER_LENGTH, MessageFactory
+from qchat.log import QChatLogger
+from qchat.messages import HEADER_LENGTH, PAYLOAD_SIZE, MAX_SENDER_LENGTH, MessageFactory
 
 
 class ConnectionError(Exception):
