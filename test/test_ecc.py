@@ -1,4 +1,4 @@
-from QChat.ecc import *
+from qchat.ecc import *
 
 
 class TestECC:

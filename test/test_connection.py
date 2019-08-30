@@ -1,7 +1,7 @@
 import threading
 import pytest
-from QChat.connection import QChatConnection, ConnectionError
-from QChat.messages import Message
+from qchat.connection import QChatConnection, ConnectionError
+from qchat.messages import Message
 
 
 class mock_connection:

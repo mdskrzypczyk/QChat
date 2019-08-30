@@ -1,5 +1,5 @@
-from QChat.mailbox import QChatMailbox
-from QChat.messages import Message
+from qchat.mailbox import QChatMailbox
+from qchat.messages import Message
 
 
 class TestMailbox:

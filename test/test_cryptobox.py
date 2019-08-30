@@ -1,4 +1,4 @@
-from QChat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
+from qchat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 
 
 class TestCryptoBox:
