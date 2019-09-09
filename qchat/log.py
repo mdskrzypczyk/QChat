@@ -21,3 +21,6 @@ class QChatLogger:
 
     def error(self, message):
         self.logger.error(message)
+
+    def exception(self, message):
+        self.logger.exception(message)

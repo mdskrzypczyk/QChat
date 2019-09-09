@@ -44,6 +44,7 @@ class QChatConnection:
         # Daemon threads
         self.cqc = cqc_connection
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.classical_thread = DaemonThread(target=self.listen_for_classical)
 
     def __del__(self):

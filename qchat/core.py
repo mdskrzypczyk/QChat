@@ -11,6 +11,7 @@ from qchat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, Q
 
 GLOBAL_SLEEP_TIME = 0.001
 
+
 class DaemonThread(threading.Thread):
     """
     Helper class that starts a thread in Daemon mode so that it can close properly when the server closes
