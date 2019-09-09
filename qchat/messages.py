@@ -17,8 +17,10 @@ class Message:
     def __init__(self, sender, message_data):
         """
         Initializes application specific message structure for use with QChat
-        :param sender: Host sending the message
-        :param message_data: Dictionary containing the message data to retain
+        :param sender: str
+            Host sending the message
+        :param message_data: dict
+            Dictionary containing the message data to retain
         """
         if len(sender) > MAX_SENDER_LENGTH:
             raise MalformedMessage("Length of sender too long")
@@ -29,8 +31,9 @@ class Message:
         """
         Transforms the message data into JSON serializable format which can be encoded/decoded
         into a byte string for communication through the sockets library
-        :param message_data:
-        :return:
+        :param message_data: dict/str/bytes
+            Data to construct the message out of
+        :return: None
         """
         try:
             if type(message_data) == dict:
@@ -48,7 +51,8 @@ class Message:
         """
         Encodes the messages information into a byte string that can be unpacked into a Message
         object on the recieving application's end
-        :return: Byte string encoding the message object's information
+        :return: bytes
+            Byte string encoding the message object's information
         """
         padded_sender = (b'\x00'*MAX_SENDER_LENGTH + bytes(self.sender, 'utf-8'))[-16:]
         try:
@@ -167,4 +171,15 @@ class MessageFactory:
         }
 
     def create_message(self, header, sender, message_data):
+        """
+        Creates a message of the specified type based on the header
+        :param header: bytes
+            Specifies the type of message to create
+        :param sender: str
+            The name of the sender
+        :param message_data: bytes/str/dict
+            The data to store in the message
+        :return: `~qchat.messages.Message`
+            A constructed messages
+        """
         return self.message_mapping[header](sender, message_data)

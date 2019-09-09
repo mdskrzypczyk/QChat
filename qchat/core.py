@@ -25,7 +25,14 @@ class QChatCore:
     def __init__(self, name, cqc_connection, configFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
-        :param name: Name of the host we want to be on the network
+        :param name: str
+            Name of the host we want to be on the network
+        :param cqc_connection: `~cqc.pythonLib.CQCConnection`
+            Classical Quantum Combiner Connection used for quantum communications
+        :param configFile: str
+            Path to the configuration file that contains settings for the specified name
+        :param allow_invalid_signatures: bool
+            Process messages with faulty signatures
         """
         self.name = name
         self.logger = QChatLogger(__name__)
@@ -66,8 +73,10 @@ class QChatCore:
     def _load_server_config(self, name):
         """
         Obtains the hosts server configuration from the config file
-        :param name:
-        :return:
+        :param name: str
+            Key in configuration where settings should be loaded from
+        :return: dict
+            The configuration loaded from the file
         """
         if self.configFile:
             config_path = self.configFile
@@ -116,7 +125,8 @@ class QChatCore:
     def start_process_thread(self, message):
         """
         Forks off a thread for handling messages so that they can be processed in parallel
-        :param message: The message we obtained from the application connection
+        :param message: `~qchat.messages.Message`
+            The message we obtained from the application connection
         :return: None
         """
         t = threading.Thread(target=self.process_message, args=(message,))
@@ -126,12 +136,11 @@ class QChatCore:
         """
         The primary message handling entrypoint, performs signature verification/stripping before passing the
         message to a specific handler
-        :param message: The inbound message from the application connection
+        :param message: `~qchat.messages.Message`
+            The inbound message from the application connection
         :return: None
         """
-        self.logger.debug("Processing {} message from {}: {}".format(message.header,
-                                                                     message.sender,
-                                                                     message.data))
+        self.logger.debug("Processing {} message from {}: {}".format(message.header, message.sender, message.data))
 
         # Verify the signature on the message for key message types
         if message.verify:
@@ -156,8 +165,10 @@ class QChatCore:
     def _sign_message(self, message):
         """
         Internal method for signing outbound messages to assure authentication
-        :param message:
-        :return:
+        :param message: `~qchat.messages.Message`
+            The message to be signed
+        :return: `~qchat.messages.Message`
+            The message with a signature attached
         """
         sig = self.signer.sign(message.encode_message())
         message.data["sig"] = sig.decode("ISO-8859-1")
@@ -166,8 +177,10 @@ class QChatCore:
     def _strip_signature(self, message):
         """
         Internal method for stripping signature data from a message that is unecessary to message handlers
-        :param message: The message we want to strip
-        :return: A tuple of the message, signature
+        :param message: `~qchat.messages.Message`
+            The message we want to strip
+        :return: tuple
+            A tuple of the message without the signature data, signature
         """
         signature = message.data.pop("sig").encode("ISO-8859-1")
         return message, signature
@@ -175,8 +188,10 @@ class QChatCore:
     def _verify_message(self, message, signature):
         """
         Internal method for verifying the signature provided with a message
-        :param message:   The message we want to verify
-        :param signature: The signature we want to verify
+        :param message: `~qchat.messages.Message`
+            The message we want to verify
+        :param signature: bytes
+            The signature we want to verify
         :return: None
         """
         data = message.encode_message()
@@ -192,8 +207,10 @@ class QChatCore:
     def _pass_message_data(self, message, handler):
         """
         Internal method for passing the message data as arguments to the message handlers
-        :param message: The message to unpack arguments from
-        :param handler: The handler that will process the message
+        :param message: `~qchat.messages.Message`
+            The message to unpack arguments from
+        :param handler: func
+            The handler that will process the message
         :return: None
         """
         handler(**message.data)
@@ -201,7 +218,8 @@ class QChatCore:
     def _store_control_message(self, message):
         """
         Internal method for handling messages that do not have specific handlers
-        :param message: The message to store
+        :param message: `~qchat.messages.Message`
+            The message to store
         :return: None
         """
         self.control_message_queue[message.sender].append(message)
@@ -210,7 +228,8 @@ class QChatCore:
     def _get_registration_data(self):
         """
         Internal method for constructing this server's registration data
-        :return: The constructed registration data
+        :return: dict
+            The constructed registration data
         """
         reg_data = {
             "user": self.name,
@@ -225,16 +244,20 @@ class QChatCore:
     def hasUser(self, user):
         """
         Interface to the user database for checking if a user exists
-        :param user:
-        :return:
+        :param user: str
+            The name of the user to check in the database
+        :return: bool
+            Whether user exists or not
         """
         return self.userDB.hasUser(user)
 
     def addUserInfo(self, user, **kwargs):
         """
         Adds arbitrary information to the user database for a user
-        :param user: The user we want to add to the database
-        :param kwargs: The key=value pairs we want to store in the database
+        :param user: str
+            The user we want to add to the database
+        :param kwargs: dict
+            The key=value pairs we want to store in the database
         :return: None
         """
         if user == "*":
@@ -253,8 +276,10 @@ class QChatCore:
         """
         Returns the relevant public information for the application that is necessary for establishing
         RSA authenticated classical communication
-        :param user: The user we want the public information for
-        :return: A dictionary containing the user's name, host/port info, and public key
+        :param user: str
+            The user we want the public information for
+        :return: dict
+            A dictionary containing the user's name, host/port info, and public key
         """
         pub_info = dict(self.userDB.getPublicUserInfo(user))
         return pub_info
@@ -262,23 +287,28 @@ class QChatCore:
     def getPublicKey(self):
         """
         Returns the server's public key
-        :return:
+        :return: bytes
+            Public key of the server
         """
         return self.userDB.getPublicKey(user=self.name)
 
     def getConnectionInfo(self, user):
         """
         Returns the connection information for the specified user
-        :param user: User we want connection information for
-        :return: A dictionary containing the host/port information of the user
+        :param user: str
+            User we want connection information for
+        :return: dict
+            A dictionary containing the host/port information of the user
         """
         return self.userDB.getConnectionInfo(user)
 
     def sendRegistration(self, host, port):
         """
         Sends this server's registration to the specified host/port
-        :param host: Host of the registry
-        :param port: Port of the registry
+        :param host: str
+            Host of the registry
+        :param port: int
+            Port of the registry
         :return: None
         """
         message = RGSTMessage(sender=self.name, message_data=self._get_registration_data())
@@ -288,7 +318,8 @@ class QChatCore:
     def requestUserInfo(self, user):
         """
         Requests the specified user's information from the root registry in the network
-        :param user: User we want to obtain information for
+        :param user: str
+            User we want to obtain information for
         :return: None
         """
         # Construct the request message
@@ -314,8 +345,10 @@ class QChatCore:
     def sendUserInfo(self, user, connection):
         """
         Sends the specified user's information to the server specified by connection
-        :param user: The user we want to provide information for
-        :param connection: The host/port information of the receiving server
+        :param user: str
+            The user we want to provide information for
+        :param connection: dict
+            The host/port information of the receiving server
         :return: None
         """
         self.logger.debug("Sending {} info to {}".format(user, connection))
@@ -328,8 +361,10 @@ class QChatCore:
     def sendMessage(self, user, message):
         """
         Interface for sending a preconstructed message object to a user
-        :param user: The user to send the message to
-        :param message: The Message object we want to send
+        :param user: str
+            The user to send the message to
+        :param message: `~qchat.messages.Message`
+            The Message object we want to send
         :return: None
         """
         # Ensure we know how to contact the user, if not resolve the information

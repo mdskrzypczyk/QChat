@@ -6,6 +6,10 @@ logging.basicConfig(format=FORMAT)
 
 
 class QChatLogger:
+    """
+    Simple logger module used in the QChat project, overrides the default logger but allows space for any additional
+    desired functionalities.
+    """
     def __init__(self, name):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(LOG_LEVEL)

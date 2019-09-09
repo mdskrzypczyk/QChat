@@ -9,7 +9,14 @@ class QChatServer(QChatCore):
     def __init__(self, name, cqc_connection, configFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
-        :param name: Name of the host we want to be on the network
+        :param name: str
+            Name of the host we want to be on the network
+        :param cqc_connection: `~cqc.pythonLib.CQCConnection`
+            Classical Quantum Combiner Connection used for quantum communications
+        :param configFile: str
+            Path to the configuration file that contains settings for the specified name
+        :param allow_invalid_signatures: bool
+            Process messages with faulty signatures
         """
 
         # Mapping of message headers to their appropriate handlers
@@ -27,7 +34,8 @@ class QChatServer(QChatCore):
         """
         Internal method that allows the server to act as an EPR source.  For use in modeling the Purified BB84
         protocol
-        :param message: Message containing user information for EPR distribution
+        :param message: `~qchat.messages.RQQBMessage`
+            Message containing user information for EPR distribution
         :return: None
         """
         # First send half to the message sender and store the second
@@ -51,9 +59,12 @@ class QChatServer(QChatCore):
     def registerUser(self, user, connection, pub):
         """
         Registers a new user to our server
-        :param user: The user being registered
-        :param connection: Connection (host/port) information of the user
-        :param pub: The RSA public key of the user for authentication
+        :param user: str
+            The user being registered
+        :param connection: dict
+            Connection (host/port) information of the user
+        :param pub: bytes
+            The RSA public key of the user for authentication
         :return: None
         """
         if self.userDB.hasUser(user):

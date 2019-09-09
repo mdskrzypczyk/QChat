@@ -21,9 +21,13 @@ class DaemonThread(threading.Thread):
 class QChatConnection:
     def __init__(self, name, cqc_connection, config):
         """
-        Initialize a connection to the CQC server and
-        :param name:   Name of the host (Must be one available by SimulaQron CQC)
-        :param config: Configuration for the connection
+        Initialize a connection to the CQC server and sets up a socket for classical communications.
+        :param name: str
+            Name of the host (Must be one available by SimulaQron CQC).
+        :param cqc_connection: `cqc.pythonLib.CQCConnection`
+            The Classical Quantum Combiner Connection over which quantum communication occurs.
+        :param config: dict
+            JSON configuration for the connection.
         """
         # Lock on the connection
         self.lock = threading.Lock()
@@ -48,10 +52,19 @@ class QChatConnection:
         self.classical_thread = DaemonThread(target=self.listen_for_classical)
 
     def __del__(self):
+        """
+        Makes sure to close the socket used for classical communications.
+        :return: None
+        """
         if self.listening_socket:
             self.listening_socket.close()
 
     def get_connection_info(self):
+        """
+        Returns a dictionary containing host/port information for the socket used in classical communication.
+        :return: dict
+            Dictionary containing info.
+        """
         info = {
             "connection": {
                 "host": self.host,
@@ -131,26 +144,41 @@ class QChatConnection:
         conn.close()
 
     def _append_message_to_queue(self, message):
+        """
+        Appends message to the inbound message queue.
+        :param message: bytes
+            The message to be added to the queue.
+        :return: None
+        """
         with self.lock:
             self.message_queue.append(message)
 
     def _pop_message_from_queue(self):
+        """
+        Removes the oldest message from the head of the queue.
+        :return: bytes
+            The oldest message stored in the queue.
+        """
         with self.lock:
             return self.message_queue.pop(0)
 
     def recv_message(self):
         """
-        Method that returns the oldest message in the queue
-        :return: None
+        Method that receives a message if one exists in the queue.
+        :return: bytes
+            The message if one exists.  Otherwise None.
         """
         return self._pop_message_from_queue() if self.message_queue else None
 
     def send_message(self, host, port, message):
         """
         Connects and sends a message to the specified host:port
-        :param host: Hostname to send to
-        :param port: Port to send to
-        :param message: Bytes object message
+        :param host: str
+            Hostname to send to
+        :param port: int
+            Port to send to
+        :param message: bytes
+            Bytes object message
         :return: None
         """
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

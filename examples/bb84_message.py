@@ -3,6 +3,10 @@ from qchat.client import QChatClient
 from qchat.server import QChatServer
 from cqc.pythonLib import CQCConnection
 
+"""
+Simple BB84 encrypted messaging example
+"""
+
 
 def main():
     # Create Simulaqron connections for each component
