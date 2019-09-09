@@ -3,7 +3,6 @@ from qchat.core import GLOBAL_SLEEP_TIME
 from qchat.messages import RQQBMessage
 from qchat.log import QChatLogger
 
-
 class MeasurementDevice:
     def __init__(self, connection, relay_info):
         """
@@ -53,7 +52,7 @@ class LeadDevice(MeasurementDevice):
                 # follow CQC's implementation and use recvEPR to obtain the qubit
                 q = self.connection.cqc.recvEPR()
                 return q
-            except Exception:
+            except:
                 pass
         raise Exception("Timed out waiting for EPR")
 
@@ -85,6 +84,6 @@ class FollowDevice(MeasurementDevice):
                 # to use the appropriate CQC command to retrieve it
                 q = self.connection.cqc.recvQubit()
                 return q
-            except Exception:
+            except:
                 pass
         raise Exception("Timed out waiting for EPR")

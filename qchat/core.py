@@ -4,10 +4,10 @@ import json
 import os
 from collections import defaultdict
 from qchat.connection import QChatConnection
-from qchat.cryptobox import QChatSigner, QChatVerifier
+from qchat.cryptobox import QChatCipher, QChatSigner, QChatVerifier
 from qchat.db import UserDB
 from qchat.log import QChatLogger
-from qchat.messages import GETUMessage, PUTUMessage, RGSTMessage
+from qchat.messages import GETUMessage, PTCLMessage, PUTUMessage, RGSTMessage, QCHTMessage, RQQBMessage
 
 GLOBAL_SLEEP_TIME = 0.001
 
@@ -100,7 +100,7 @@ class QChatCore:
             else:
                 self.sendRegistration(host=root_host, port=root_port)
 
-        except Exception:
+        except:
             self.logger.info("Failed to register with root server, is it running?")
 
     def read_from_connection(self):
@@ -147,6 +147,7 @@ class QChatCore:
         # Strip unnecessary signature information should it not be necessary for the message type
         elif message.strip:
             message, _ = self._strip_signature(message)
+
 
         handler = self.proc_map.get(message.header, self._store_control_message)
         handler(message)
