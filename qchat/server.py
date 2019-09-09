@@ -1,7 +1,8 @@
 import random
+from cqc.pythonLib import qubit
 from functools import partial
 from qchat.messages import GETUMessage, PUTUMessage, RGSTMessage, RQQBMessage
-from qchat.core import QChatCore, DaemonThread
+from qchat.core import QChatCore
 
 
 class QChatServer(QChatCore):

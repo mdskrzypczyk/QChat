@@ -42,7 +42,7 @@ class QChatRPCServer:
             if messages:
                 self.logger.info("Received messages {} from user {}".format(messages, user))
 
-        except:
+        except Exception:
             self.logger.exception("Failed getting messages from {}".format(user))
 
         return messages
