@@ -3,6 +3,7 @@ from qchat.client import QChatClient
 from qchat.server import QChatServer
 from cqc.pythonLib import CQCConnection
 
+
 def main():
     # Create Simulaqron connections for each component
     with CQCConnection(name="Alice") as cqc_alice, CQCConnection(name="Bob") as cqc_bob, \

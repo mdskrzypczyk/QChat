@@ -7,7 +7,7 @@ from qchat.cryptobox import QChatCipher
 from qchat.mailbox import QChatMailbox
 from qchat.messages import QCHTMessage, SPDSMessage, GETUMessage, PUTUMessage, PTCLMessage
 from qchat.protocols import ProtocolFactory, QChatKeyProtocol, QChatMessageProtocol, BB84_Purified, \
-                            DIQKD, SuperDenseCoding, LEADER_ROLE, FOLLOW_ROLE
+                            SuperDenseCoding, LEADER_ROLE, FOLLOW_ROLE
 
 
 class QChatClient(QChatCore):
@@ -121,7 +121,7 @@ class QChatClient(QChatCore):
         user_key = self.userDB.getMessageKey(user)
         if not user_key:
             self._establish_key(user, 16)
-            user_key=self.userDB.getMessageKey(user)
+            user_key = self.userDB.getMessageKey(user)
 
         # Encrypt the plaintext information
         nonce, ciphertext, tag = QChatCipher(user_key).encrypt(plaintext.encode("ISO-8859-1"))

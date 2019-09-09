@@ -13,6 +13,7 @@ class Message:
     header = b'MSSG'
     verify = False
     strip = False
+
     def __init__(self, sender, message_data):
         """
         Initializes application specific message structure for use with QChat
@@ -40,7 +41,7 @@ class Message:
                 self.data = json.loads(str(message_data, 'utf-8'))
             else:
                 raise MalformedMessage
-        except:
+        except Exception:
             raise MalformedMessage
 
     def encode_message(self):
@@ -52,7 +53,7 @@ class Message:
         padded_sender = (b'\x00'*MAX_SENDER_LENGTH + bytes(self.sender, 'utf-8'))[-16:]
         try:
             byte_data = bytes(json.dumps(self.data), 'utf-8')
-        except:
+        except Exception:
             raise MalformedMessage
 
         size = len(byte_data).to_bytes(PAYLOAD_SIZE, 'big')

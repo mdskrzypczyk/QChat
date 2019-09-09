@@ -1,5 +1,4 @@
 import threading
-from collections import defaultdict
 from qchat.log import QChatLogger
 
 
