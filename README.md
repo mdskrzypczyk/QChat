@@ -14,20 +14,30 @@ between two users using AES-GCM to guarantee authenticity and
   key establishment process.
   
  # Setup
- Clone the repo and install the dependencies in the provided
- requirements.txt file using:
- 
-    pip install -r requirements.txt
+ Begin by cloning the repo locally.
 
- You can then export the path to the qchat source directory with:
+ ## Dependencies and Verification
+ To install dependencies simply run:
 
-    export PYTHONPATH=$PYTHONPATH:/path/to/qchat
-    
- # Getting Started
- After setting up the project you can test that everything is working
- by initializing the nodes for the SimulaQron network and running
- the examples provided.  See the SimulaQron documentation for further
- details in starting nodes.
+    make python-deps
+
+ To install dependencies and run tests run:
+
+    make verify
+
+ ## Building and Installation
+ The qchat package can be built using:
+
+    make build
+
+ And can be built+installed using:
+
+    make install
+
+ ## Without installation
+ QChat can also be used without building and installing the package.  To do so add the repo directory to your PYTHONPATH:
+
+    export PYTHONPATH=$PYTHONPATH:/path/to/QChat/
  
  # RPC
- There is a basic XML-RPC Server and Client located within the qchat example directory now.
+ There is a basic RPC example located in the examples/rpc_demo directory.
