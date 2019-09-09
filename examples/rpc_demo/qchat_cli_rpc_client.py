@@ -4,8 +4,16 @@ import logging
 import sys
 from qchat.rpc import QChatCLIRPCClient
 
+"""
+Sample RPC client that runs a dialog box between two users
+"""
+
 
 def main():
+    """
+    Runs the RPCClient using the provided information
+    :return:
+    """
     logging.basicConfig()
     args = _parse_args()
     qchat_client = QChatCLIRPCClient(args.user, args.destination, args.server_url)

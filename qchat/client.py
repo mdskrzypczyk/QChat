@@ -14,8 +14,14 @@ class QChatClient(QChatCore):
     def __init__(self, name, cqc_connection, configFile=None, allow_invalid_signatures=False):
         """
         Initializes a QChat Server that serves as the primary communication interface with other applications
-        :param name: Name of the host we want to be on the network
-        :param allow_invalid_signatures: process messages with faulty signatures
+        :param name: str
+            Name of the host we want to be on the network
+        :param cqc_connection: `~cqc.pythonLib.CQCConnection`
+            Classical Quantum Combiner Connection used for quantum communications
+        :param configFile: str
+            Path to the configuration file that contains settings for the specified name
+        :param allow_invalid_signatures: bool
+            Process messages with faulty signatures
         """
         # Outbound message queue
         self.outbound_queue = Queue()
@@ -51,7 +57,8 @@ class QChatClient(QChatCore):
         """
         Internal method for handling a PTCL Message, upon receipt of a PTCL Message the server assumes the
         follower role in the protocol
-        :param message: The PTCL Message containing protocol initialization information
+        :param message: `~qchat.messages.PTCLMessage`
+            The PTCL Message containing protocol initialization information
         :return: None
         """
         # Construct peer information for the protocol
@@ -85,9 +92,12 @@ class QChatClient(QChatCore):
     def _establish_key(self, user, key_size, protocol_class=BB84_Purified):
         """
         Internal method for leading a key establishment protocol
-        :param user: The user we want to establish the shared key with
-        :param key_size: The size of the key (in bytes) that we want to construct
-        :param protocol_class: The protocol we want to use to establish the key
+        :param user: str
+            The user we want to establish the shared key with
+        :param key_size: int
+            The size of the key (in bytes) that we want to construct
+        :param protocol_class: `~qchat.protocols.QChatKeyProtocol`
+            The protocol we want to use to establish the key
         :return: None
         """
         # Check that we have the user in out system
@@ -113,9 +123,12 @@ class QChatClient(QChatCore):
     def createQChatMessage(self, user, plaintext):
         """
         Creates an encrypted chat message
-        :param user: The user we want to create the message for
-        :param plaintext: The string we want to communicate via the message
-        :return: An encrypted QChat message object
+        :param user: str
+            The user we want to create the message for
+        :param plaintext: str
+            The string we want to communicate via the message
+        :return: `~qchat.messages.QCHTMessage`
+            An encrypted QChat message object
         """
         # Check that we have a message key established with this user and establish one if none
         user_key = self.userDB.getMessageKey(user)
@@ -139,8 +152,10 @@ class QChatClient(QChatCore):
     def sendQChatMessage(self, user, plaintext):
         """
         Sends a QChat Message containing the plaintext information to the specified user
-        :param user: The user we wish to send the message to
-        :param plaintext: The plaintext information to communicate to the user
+        :param user: str
+            The user we wish to send the message to
+        :param plaintext: str
+            The plaintext information to communicate to the user
         :return: None
         """
         # Ensure we have a route to the user
@@ -155,8 +170,10 @@ class QChatClient(QChatCore):
     def sendSuperDenseMessage(self, user, plaintext):
         """
         Sends a superdense coded message to the specified user
-        :param user: The user we want to send the superdense message to
-        :param plaintext: The plaintext we wish to communicate
+        :param user: str
+            The user we want to send the superdense message to
+        :param plaintext: str
+            The plaintext we wish to communicate
         :return: None
         """
         # Get user information if we don't have it
@@ -180,13 +197,15 @@ class QChatClient(QChatCore):
 
     def getMessageHistory(self):
         """
-        Returns the received message history stored in our mailbox for the specified user
-        :param user: The user to get message history for
-        :return: A list of decrypted messages that we have received from the user
+        Returns the received message history stored in our mailbox for all users.
+        :return: dict
+            A dictionary containing the lists of messages keyed by the user.
         """
         messages = defaultdict(list)
         for _, qm in enumerate(self.mailbox.popMessages()):
             sender = qm.sender
+
+            # Check if this message needs decrypting
             if qm.header == QCHTMessage.header:
                 user_key = self.userDB.getMessageKey(sender)
                 # Obtain cipher data

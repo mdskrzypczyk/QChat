@@ -1,3 +1,4 @@
+import abc
 import numpy as np
 
 # Golay Matrix for error correction
@@ -22,9 +23,12 @@ H_Hamming = np.matrix([[1, 0, 1, 0, 1, 0, 1],
 def getSyndrome(H, v):
     """
     Calculates the syndrome string given a matrix and codeword
-    :param H:
-    :param v:
-    :return:
+    :param H: `~numpy.matrix`
+        The parity-check matrix to use
+    :param v: `~numpy.matrix`
+        The codeword vector to check
+    :return: `~numpy.matrix`
+        The extracted syndrome
     """
     s = (H*v) % 2
     return s.reshape(1, 11)
@@ -33,16 +37,19 @@ def getSyndrome(H, v):
 def eVect(length, position):
     """
     Helper for constructing a zero vector of specified length with a 1 in the specified position
-    :param length: Length of the zero vector
-    :param position: Position of the 1
-    :return: Constructed vector
+    :param length: int
+        Length of the zero vector
+    :param position: int
+        Position of the 1
+    :return: `~numpy.matrix`
+        Constructed vector
     """
     vec = [0 for _ in range(length)]
     vec[-position] = 1
     return np.matrix(vec)
 
 
-class ECC:
+class ECC(metaclass=abc.ABCMeta):
     """
     Base class that implements linear code encoding/decoding interface
     """
@@ -52,16 +59,20 @@ class ECC:
     def chunk(self, x):
         """
         Chunks a list of 0/1's into the ECC objects processing codeword length
-        :param x:
-        :return:
+        :param x: list
+            List of integers 0/1
+        :return: list
+            List of codeword_length-length lists
         """
         return [x[i:i+self.codeword_length] for i in range(0, len(x), self.codeword_length)]
 
     def encode(self, x):
         """
         Encodes a specified codeword into a JSON-able syndrome string
-        :param x: The codeword to encode
-        :return: An encoding of the codeword
+        :param x: tuple
+            The codeword to encode (0/1)
+        :return: tuple
+            An encoding of the codeword
         """
         s = getSyndrome(self.H, np.matrix(x).reshape(self.codeword_length, 1))
         return tuple(s.tolist()[0])
@@ -69,9 +80,12 @@ class ECC:
     def decode(self, x, s):
         """
         Corrects errors in the received codeword x using the provided encoding information s
-        :param x: The codeword we wish to correct
-        :param s: The original codeword's syndrome information
-        :return: A corrected version of the codeword
+        :param x: tuple
+            The codeword we wish to correct
+        :param s: tuple
+            The original codeword's syndrome information
+        :return: list
+            A corrected version of the codeword
         """
         xm = np.matrix(x).reshape(self.codeword_length, 1)
         sm = np.matrix(s)

@@ -9,8 +9,10 @@ class MeasurementDevice:
         """
         Used to implement trusted/untrusted measurement devices for use in receiving BB84 states from source
         and performing measurements on the qubits
-        :param connection:
-        :param relay_info:
+        :param connection: `~qchat.connection.QChatConnection`
+            Connection to be used for classical and quantum communications
+        :param relay_info: dict
+            Relay information about how messages travel over other nodes
         """
         self.connection = connection
         self.logger = QChatLogger(__name__)
@@ -22,7 +24,8 @@ class MeasurementDevice:
     def requestEPR(self, user):
         """
         Method used for sending a request for EPR pairs from the source
-        :param user: The user we want to share an EPR pair with
+        :param user: str
+            The user we want to share an EPR pair with
         :return: None
         """
         m = RQQBMessage(sender=self.connection.name, message_data={"user": user})
@@ -34,6 +37,14 @@ class LeadDevice(MeasurementDevice):
     Implements measurements and EPR retrieval for a protocol leader
     """
     def measure(self, q, basis):
+        """
+        Measures a qubit in the specified basis
+        :param q: `~cqc.pythonLib.qubit`
+            The qubit to be measured
+        :param basis: int
+            0 - Z-basis, 1 - X-basis
+        :return:
+        """
         if basis == 0:
             return q.measure()
         elif basis == 1:
@@ -43,8 +54,10 @@ class LeadDevice(MeasurementDevice):
     def receiveEPR(self, timeout=60):
         """
         Receives an EPR half and handles timeout
-        :param timeout: The length in seconds to wait before timing out
-        :return: The received qubit
+        :param timeout: int
+            The length in seconds to wait before timing out
+        :return: `~cqc.pythonLib.qubit`
+            The received qubit
         """
         start = time.time()
         while not time.sleep(GLOBAL_SLEEP_TIME) and time.time() - start < timeout:
@@ -63,6 +76,14 @@ class FollowDevice(MeasurementDevice):
     Implements measurements and EPR retrieval for a protocol follower
     """
     def measure(self, q, basis):
+        """
+        Measures a qubit in the specified basis
+        :param q: `~cqc.pythonLib.qubit`
+            The qubit to be measured
+        :param basis: int
+            Selects the rotated basis to be used (primarily in DIQKD)
+        :return:
+        """
         if basis == 0:
             q.rot_Y(48)
             return q.measure()
@@ -75,8 +96,10 @@ class FollowDevice(MeasurementDevice):
     def receiveEPR(self, timeout=60):
         """
         Receives an EPR half and handles timeout
-        :param timeout: The length in seconds to wait before timing out
-        :return: The received qubit
+        :param timeout: int
+            The length in seconds to wait before timing out
+        :return: `~cqc.pythonLib.qubit`
+            The received qubit
         """
         start = time.time()
         while not time.sleep(GLOBAL_SLEEP_TIME) and time.time() - start < timeout:

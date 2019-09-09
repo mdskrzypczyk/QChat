@@ -7,6 +7,10 @@ from qchat.rpc import QChatRPCServer, RequestHandler
 from threading import Thread
 from xmlrpc.server import SimpleXMLRPCServer
 
+"""
+Starts the RPC Servers to be used for the rpc demo
+"""
+
 CLIENTS = {
     "Alice": 33333,
     "Bob": 33334
@@ -16,6 +20,9 @@ SERVER_THREADS = {}
 
 
 class RPCServerThread(Thread):
+    """
+    Helper class for a thread that runs the RPC Server that allows killing
+    """
     def __init__(self, server, target):
         super(RPCServerThread, self).__init__()
         self.running = True
@@ -30,6 +37,18 @@ class RPCServerThread(Thread):
 
 
 def start_rpc_server(user, host, port, client):
+    """
+    Starts an RPC Server using the specified information
+    :param user: str
+        The user to start the server for
+    :param host: str
+        Host information of the server
+    :param port: int
+        Port information of the server
+    :param client: `~qchat.client.QChatClient`
+        The QChatClient the RPCServer interacts with
+    :return: None
+    """
     if user not in SERVER_THREADS.keys():
         # Create server
         server = SimpleXMLRPCServer((host, port), requestHandler=RequestHandler)
