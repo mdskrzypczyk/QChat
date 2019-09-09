@@ -18,6 +18,7 @@ H_Hamming = np.matrix([[1, 0, 1, 0, 1, 0, 1],
                        [0, 1, 1, 0, 0, 1, 1],
                        [0, 0, 0, 1, 1, 1, 1]])
 
+
 def getSyndrome(H, v):
     """
     Calculates the syndrome string given a matrix and codeword
@@ -36,9 +37,9 @@ def eVect(length, position):
     :param position: Position of the 1
     :return: Constructed vector
     """
-    l = [0 for _ in range(length)]
-    l[-position] = 1
-    return np.matrix(l)
+    vec = [0 for _ in range(length)]
+    vec[-position] = 1
+    return np.matrix(vec)
 
 
 class ECC:
@@ -83,6 +84,7 @@ class ECC:
 
 class ECC_Golay(ECC):
     codeword_length = 23
+
     def __init__(self):
         """
         Initializes Golay error correcting code matrix for use with ECC
@@ -118,6 +120,7 @@ class ECC_Golay(ECC):
 
 class ECC_Hamming(ECC):
     codeword_length = 7
+
     def __init__(self):
         """
         Initializes Hamming error correcting code matrix for use with ECC

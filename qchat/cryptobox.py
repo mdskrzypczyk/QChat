@@ -1,7 +1,7 @@
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
-from Crypto.Hash import SHA256, SHA384
-from Crypto.Signature import DSS, pkcs1_15
+from Crypto.Hash import SHA384
+from Crypto.Signature import pkcs1_15
 
 
 class QChatCipher:
@@ -56,5 +56,5 @@ class QChatVerifier:
         try:
             verifier.verify(hash_obj, sig)
             return True
-        except:
+        except Exception:
             return False

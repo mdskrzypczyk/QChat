@@ -150,6 +150,7 @@ class BB84_Purified(QChatKeyProtocol):
     """
     name = "BB84_PURIFIED"
     message_type = BB84Message
+
     def _receive_bb84_states(self):
         """
         Method is intended to receive the distributed qubits from the EPR pair.
@@ -414,6 +415,7 @@ class DIQKD(BB84_Purified):
     """
     name = "DIQKD"
     message_type = DQKDMessage
+
     def _device_independent_distribute_bb84(self):
         """
         Implements the leading role of the DIQKD protocol
@@ -629,6 +631,7 @@ class SuperDenseCoding(QChatMessageProtocol):
     """
     name = "SUPERDENSE"
     message_type = SPDSMessage
+
     def send_message(self, message):
         """
         Implements streaming data to the user using qubits
@@ -655,7 +658,7 @@ class SuperDenseCoding(QChatMessageProtocol):
                 qa = self.connection.cqc.createEPR(user)
 
                 # Let our peer know their half of the EPR is ready
-                m = self.exchange_messages(message_data={"ack":True}, message_type=self.message_type)
+                m = self.exchange_messages(message_data={"ack": True}, message_type=self.message_type)
                 if not m.data["ack"]:
                     raise ProtocolException("Failed to send {}'s qubit".format(user))
 
