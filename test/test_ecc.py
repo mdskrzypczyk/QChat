@@ -1,6 +1,3 @@
-from qchat.ecc import *
-
-
 class TestECC:
     @classmethod
     def setup_class(cls):
