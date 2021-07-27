@@ -4,6 +4,36 @@ from qchat.connection import QChatConnection, ConnectionError
 from qchat.messages import Message
 
 
+class mock_qubit:
+    pass
+
+
+class mock_cqc:
+    qubits = {}
+
+    def __init__(self, user):
+        self.user = user
+        self.qubits[self.user] = {'epr': [], 'qubits': []}
+
+    def createEPR(self, user):
+        our_qubit, their_qubit = mock_qubit(), mock_qubit()
+        self.qubits[user]['epr'].append(their_qubit)
+        return our_qubit
+
+    def recvEPR(self):
+        has_epr = self.qubits[self.user]['epr'] != []
+        epr = self.qubits[self.user]['epr'].pop(0) if has_epr else None
+        return epr
+
+    def sendQubit(self, q, user):
+        self.qubits[user]['qubits'].append(q)
+
+    def recvQubit(self):
+        has_qubit = self.qubits[self.user]['qubits'] != []
+        qubit = self.qubits[self.user]['qubits'].pop(0) if has_qubit else None
+        return qubit
+
+
 class mock_connection:
     def __init__(self, buffer):
         self.buffer = buffer
@@ -30,13 +60,15 @@ class TestQChatConnection:
         cls.test_addr = 'localhost'
         cls.test_config1 = {"host": "localhost", "port": 8000}
         cls.test_config2 = {"host": "localhost", "port": 8001}
-        cls.connection = QChatConnection(name=cls.test_name, config=cls.test_config1)
+        cls.connection = QChatConnection(name=cls.test_name, config=cls.test_config1,
+                                         cqc_connection=mock_cqc(cls.test_name))
 
     def test_QChatConnection(self):
         assert self.connection.name == self.test_name
         assert self.connection.host == self.test_config1['host']
         assert self.connection.port == self.test_config1['port']
-        assert type(self.connection.lock) == type(threading.Lock())
+        threading_lock = type(threading.Lock())
+        assert isinstance(self.connection.lock, threading_lock)
         assert self.connection.message_queue == []
 
     def test_get_message(self):

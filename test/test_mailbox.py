@@ -12,21 +12,21 @@ class TestMailbox:
     def test_storeMessage(self):
         m = QChatMailbox()
         m.storeMessage(self.test_message)
-        [stored] = m.messages[self.test_user]
+        [stored] = m.messages
         assert stored.sender == self.test_message.sender
         assert stored.header == self.test_message.header
         assert stored.data == self.test_message.data
 
     def test_getMessage(self):
         m = QChatMailbox()
-        assert m.getMessage("User") == None
-        m.messages[self.test_user] = [self.test_message]
-        assert m.getMessage("User") == self.test_message
+        assert m.getMessages() == []
+        m.messages = [self.test_message]
+        assert m.getMessages() == [self.test_message]
 
     def test_store_get(self):
         m = QChatMailbox()
         m.storeMessage(self.test_message)
-        stored = m.getMessage(self.test_user)
+        stored = m.getMessages()[0]
         assert stored.sender == self.test_message.sender
         assert stored.header == self.test_message.header
         assert stored.data == self.test_message.data

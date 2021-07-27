@@ -2,7 +2,7 @@ PYTHON        = python3
 PIP           = pip3
 SOURCEDIR     = qchat
 EXAMPLES      = examples
-TESTS         = tests
+TESTS         = test
 
 clean: _clean_pyc _clean_dist
 
@@ -25,7 +25,7 @@ python-deps:
 	@$(PIP) install -r requirements.txt
 
 tests:
-	@$(PYTHON) -m unittest discover -s $(SOURCEDIR) $(EXAMPLES) $(TESTS)
+	pytest $(TESTS)
 
 verify: clean python-deps lint tests
 
