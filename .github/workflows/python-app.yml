@@ -26,6 +26,9 @@ jobs:
       run: make lint
     - name: Test
       run: make tests
+    - name: Docs
+      run: make html
+      working-directory: ./docs
     - name: Build
       run: make build
     - name: Test Install
