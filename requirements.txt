@@ -1,4 +1,6 @@
 pycryptodome
 pytest
 simulaqron
+sphinx
+sphinx-rtd-theme
 wheel
